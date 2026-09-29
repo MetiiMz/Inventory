@@ -40,7 +40,7 @@ git --no-pager log --oneline -1
 | گام | کار | دروازه‌ی اضافه‌ی مخصوص همان گام | انتظار |
 |---|---|---|---|
 | **۰** | افزودن ماژول تست مرجع (فقط مسیرهای لگاسی) | `manage.py test` روی کد دست‌نخورده + `git log` | سبز **پیش از** هر تغییر ساختاری؛ این نخستین commit است (SC-011) |
-| **۱** | حذف `/api/v1/` + DRF + دو تابع بی‌استفاده | `grep -rn 'rest_framework\|api/v1' --include=*.py .` + `curl -s -o /dev/null -w '%{http_code}' localhost:8000/api/v1/products` | صفر ارجاع باقی‌مانده؛ پاسخ مسیر حذف‌شده = ۴۰۴ لگاسی `{"ok": false, "error": "یافت نشد"}`؛ تعداد تست = ۱۴۷+N−۱۶ |
+| **۱** | حذف `/api/v1/` + DRF + دو تابع بی‌استفاده | `grep -rn 'rest_framework\|api/v1' --include=*.py .` + `curl -s -o /dev/null -w '%{http_code}' localhost:8000/api/v1/products` | صفر ارجاع باقی‌مانده؛ پاسخ مسیر حذف‌شده = ۴۰۴ پیش‌فرض جنگو (بدون پوشش JSON — هیچ `handler404` سفارشی سیم‌کشی نشده است)؛ تعداد تست = ۱۴۷+N−۱۶ |
 | **۲** | حذف gunicorn/whitenoise + مسیر استاتیک صریح | `DJANGO_DEBUG=0 .venv/bin/python backend/manage.py runserver` و درخواست یک دارایی | `200` برای `/static/css/app.css?v=...` در DEBUG=0 (R3)؛ `requirements.txt` سه خطی |
 | **۳** | تقسیم `services.py` → پکیج | `git diff --stat` + جست‌وجوی ارتفاع ماژول‌ها | صفر تغییر در صدا‌زننده‌ها؛ هیچ ماژول > ۴۰۰ خط؛ پوشه‌ی خالی قبلی پاک شده |
 | **۴** | تقسیم `compat.py` → پکیج | همان + `grep -rn 'api_brands_add\|_page_ctx'` | صفر ارجاع؛ صفر تغییر در `tikotime/urls.py` و تست‌ها |
@@ -120,7 +120,7 @@ grep -rn 'api/v1' frontend/ backend/ tikotime/ 2>/dev/null | wc -l              
 ### V11 — ترتیب و برگشت‌پذیری commitها (SC-011، FR-026)
 ```bash
 git --no-pager log --oneline -8
-git show --stat $(git log --format=%H --reverse | head -1)   # نخستین commit این کار
+git log --oneline --diff-filter=A -- tests/test_legacy_api_baseline.py   # نخستین commit این کار (گام ۰)
 ```
 **انتظار**: نخستین commit = افزودن ماژول تست مرجع (فقط همان فایل)؛ سپس به‌ترتیب گام‌های ۱..۵، هر کدام یک commit مستقل و قابل `git revert`.
 

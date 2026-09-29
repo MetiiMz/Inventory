@@ -135,7 +135,7 @@ project-root/
 | گام | کار | خروجی همان commit | دروازه |
 |---|---|---|---|
 | ۰ | ماژول تست مرجع مسیرهای لگاسی (`tests/test_legacy_api_baseline.py`) | تست جدید سبز روی کد دست‌نخورده | `manage.py test` + `git log` = نخستین commit (SC-011) |
-| ۱ | حذف `/api/v1/` + DRF + `api_brands_add`/`_page_ctx` + تست‌های v1 + مستندات مربوط | ۵ فایل حذف، `settings.py`/`urls.py`/`requirements.txt`/README تمیز | صفر ارجاع باقی‌مانده؛ ۴۰۴ لگاسی روی `/api/v1/*` |
+| ۱ | حذف `/api/v1/` + DRF + `api_brands_add`/`_page_ctx` + تست‌های v1 + مستندات مربوط | ۵ فایل حذف، `settings.py`/`urls.py`/`requirements.txt`/README تمیز | صفر ارجاع باقی‌مانده؛ ۴۰۴ پیش‌فرض جنگو روی `/api/v1/*` |
 | ۲ | حذف `gunicorn`/`whitenoise` + بلاک `STORAGES`/`WHITENOISE_MAX_AGE` + پوشه‌ی `staticfiles/` + افزودن مسیر استاتیک `insecure=True` | ۳ خط مانیفست، `MIDDLEWARE` تمیز، مسیر استاتیک | `200` برای دارایی در `DEBUG=0` |
 | ۳ | پاک‌سازی باقی‌مانده + تقسیم `services.py` به ۱۱ ماژول + `__init__` باز‌export | پکیج `services/` | صفر تغییر در صدا‌زننده‌ها؛ ≤۴۰۰ خط |
 | ۴ | تقسیم `compat.py` به ۱۱ ماژول + `__init__` باز‌export | پکیج `compat/` | صفر تغییر در `urls.py`/تست‌ها؛ ≤۴۰۰ خط |
