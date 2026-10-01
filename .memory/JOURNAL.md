@@ -2,6 +2,14 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-01 — Layout-refactor preflight + test-isolation leak found
+
+- Baseline recorded before any structural change: `147 tests OK`, `manage.py check` clean, images **139**, backups 42, exports 54, db `sha256=f753fc1cc299f31762d4c9a2b8751af27c0300dfb933abcda7a008b8cf69444f`. Rescue net verified at `/tmp/tiko-preflight` (full `data` copy + `code.tgz`; DB hash identical to the repo).
+- **Pre-existing bug found (out of scope, to fix standalone):** the suite leaks **2 × 58-byte PNGs per run** into the real `data/images/` — `tests/test_services_misc.py:90,100` call `services.save_upload()` without `override_settings(IMG_DIR=…)` (write path `services.py:955-956`). Recorded as an OPEN known issue in `INDEX.md`; FR-010 forbids touching those test files during the refactor.
+- **Artifact correction (this commit):** stale `۱۳۵`-image figures replaced with the measured `۱۳۹`, and the step-5 data gate became a before/after **image-set** comparison (SC-004, T047/T048, quickstart V4) so later full-suite gate runs cannot drift the count.
+- Reason it matters: every gate run of the full suite adds 2 orphans, so any gate written as "= 135 files" would have failed for reasons unrelated to the refactor.
+
+
 ## 2026-09-10 — Full test suite (`e7d6628`)
 
 - **147 tests / 10 modules** in the dedicated `tests/` directory (the established convention), all passing via `manage.py test tests`:

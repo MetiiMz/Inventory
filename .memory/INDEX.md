@@ -61,6 +61,8 @@
 - Integration tests live in `tests/` and run against a temp DB: `.venv/bin/python tests/test_calendar_sale_deletion.py`.
 
 ## Known issues / decisions (updated 2026-09-06)
+- ⚠️ **OPEN (2026-10-01, found during the layout-refactor preflight) — test isolation leak (out of scope of the refactor):** `tests/test_services_misc.py:90` (`test_multipart_upload`) and `:100` (`test_json_base64_upload`) call `services.save_upload()` **without** `override_settings(IMG_DIR=…)`, so every full-suite run writes **2 × 58-byte orphan PNGs** into the REAL `data/images/` (write path: `inventory/api/services.py:955-956` → `settings.IMG_DIR`). Observed orphans: 2026-09-17, 09-27, 09-28, 09-29, 10-01 (`img_<date>_*.png`, 58 bytes each). **Fix later as a standalone change** — add `override_settings(IMG_DIR=<tmpdir>)` to those two tests — and NOT during this refactor, because FR-010 forbids editing existing test files. Until then: data-area gates compare image **sets** before/after (never a fixed count) — see SC-004, T047/T048 and quickstart V4.
+
 - ✅ **FIXED (2026-09-06):** Sales-page deposit bug — Django `api_sales` lists ALL sales regardless of `is_settled` (verified in E2E suite).
 - ✅ **FIXED (2026-09-06):** `templates/dashboard.html` still referenced removed `qty` key → `no such element` shown on dashboard + Add-Watch modal area; replaced with available-based display.
 - ✅ **FIXED (2026-09-06):** `inventory/utils.py::product_dict` lacked `is_available` while `products.js`/`calendar.js` use `p.is_available` — added `"is_available": bool(r.available)` (keep BOTH keys when touching serializers).

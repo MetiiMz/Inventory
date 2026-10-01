@@ -8,7 +8,7 @@
 
 - پایتون ۳.۱۰+ (محیط فعلی: ۳.۱۴.۴) و محیط مجازی موجود در **ریشه‌ی مخزن**: `.venv/`
 - Django 5.2.6 نصب‌شده در همان venv (پس از گام‌های ۱ و ۲ فقط سه کتابخانه باقی می‌ماند)
-- داده‌ی واقعی دست‌نخورده: `db/db.sqlite3` + `db/images/` (۱۳۵ فایل) + `db/backups/` + `db/exports/`
+- داده‌ی واقعی دست‌نخورده: `db/db.sqlite3` + `db/images/` (۱۳۹ فایل) + `db/backups/` + `db/exports/`
 - برنامه **خاموش** در گام ۵ (جابه‌جایی فیزیکی داده‌ها)
 
 ## آماده‌سازی (یک‌بار)
@@ -73,10 +73,12 @@ cd backend && ../.venv/bin/python manage.py test 2>&1 | tail -4 ; cd ..
 
 ### V4 — داده‌ی کاربر و عملیات فایل‌محور (SC-004، FR-011)
 ```bash
-ls db/ && ls db/images | wc -l && ls db/backups | head -3 && ls db/exports | head -3
+ls db/ && find db/images -maxdepth 1 -type f -printf '%f\n' | sort > /tmp/tiko-images-after.txt
+diff /tmp/tiko-images-before.txt /tmp/tiko-images-after.txt && echo 'IMAGE SET UNCHANGED (zero diff)'
+ls db/backups | head -3 && ls db/exports | head -3
 .venv/bin/python -c "import sqlite3;c=sqlite3.connect('db/db.sqlite3');print(c.execute('PRAGMA integrity_check').fetchone()[0])"
 ```
-**انتظار**: `db/db.sqlite3` + `images/` + `backups/` + `exports/` موجود؛ `images` همان ۱۳۵ فایل؛ `integrity_check` = `ok`.
+**انتظار**: `db/db.sqlite3` + `images/` + `backups/` + `exports/` موجود؛ **مجموعه‌ی تصاویر عیناً حفظ شده** — `diff /tmp/tiko-images-before.txt /tmp/tiko-images-after.txt` باید **هیچ خطی** برنگرداند (پایه‌ی ۲۰۲۶-۱۰-۰۱: ۱۳۹ فایل؛ Refactor صفر تصویر اضافه/کم می‌کند)؛ `integrity_check` = `ok`.
 **تکمیل دستی (الزامی)**: در UI یک عکس آپلود کنید، بکاپ بسازید، ریستور کنید، اکسل اکسپورت و ایمپورت کنید؛ هر چهار عملیات موفق و فایل‌های خروجی داخل `db/` ساخته شوند.
 
 ### V5 — کمینه بودن وابستگی‌ها (SC-005، FR-020)
@@ -136,7 +138,7 @@ cd backend && ../.venv/bin/python manage.py test   # تأیید سبز شدن د
 
 ```text
 project-root/
-├── db/         # db.sqlite3 · images/ (۱۳۵) · backups/ · exports/     ← نادیده در git
+├── db/         # db.sqlite3 · images/ (۱۳۹) · backups/ · exports/     ← نادیده در git
 ├── backend/    # manage.py · requirements.txt (۳ خط) · tests/ · tikotime/
 │   └── inventory/
 │       ├── models.py · utils.py · dbhelpers.py · excel_io.py · jalali.py · reports.py

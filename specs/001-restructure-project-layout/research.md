@@ -90,7 +90,7 @@ TEMPLATES[0]["DIRS"] = [BASE_DIR.parent / "frontend" / "templates"]
 `IMG_DIR = settings.IMG_DIR` و `BACKUP_DIR = settings.BACKUP_DIR` (نام‌ها حفظ می‌شوند تا قرارداد تست‌ها نشکند).
 
 **Evidence**:
-- `inventory/utils.py:9-12` امروز مسیر تصاویر/پشتیبان را از `os.path.dirname(__file__)` می‌سازد (دو سطح بالاتر = ریشه‌ی پروژه). بعد از جابه‌جایی به `backend/` همان فرمول به `backend/data/...` اشاره می‌کند → **۱۳۵ تصویر موجود یتیم می‌شوند** و `remove_image` بی‌اثر می‌شود.
+- `inventory/utils.py:9-12` امروز مسیر تصاویر/پشتیبان را از `os.path.dirname(__file__)` می‌سازد (دو سطح بالاتر = ریشه‌ی پروژه). بعد از جابه‌جایی به `backend/` همان فرمول به `backend/data/...` اشاره می‌کند → **۱۳۹ تصویر موجود یتیم می‌شوند** و `remove_image` بی‌اثر می‌شود.
 - `inventory/api/services.py:1162` و `:1177` پوشه‌ی خروجی را دستی از `settings.DATA_DIR` می‌سازند (دو جای موازی برای یک مسیر). در طرح نهایی این دو نقطه به **یک** کمکی `_export_dir()` در `services/export_import.py` تبدیل می‌شوند که همچنان از `settings.DATA_DIR` مشتق می‌شود؛ تنظیم مستقل `EXPORT_DIR` کنار گذاشته شد چون `override_settings(DATA_DIR=...)` — که `tests/test_services_misc.py:145,160,180` به آن تکیه دارند و طبق FR-010 قابل ویرایش نیستند — بی‌اثر می‌شد و تست‌ها در داده‌ی واقعی می‌نوشتند.
 - `inventory/api/compat.py:126،513،533` و `views/pages.py` از `settings.*` می‌خوانند (درست).
 
@@ -114,7 +114,7 @@ TEMPLATES[0]["DIRS"] = [BASE_DIR.parent / "frontend" / "templates"]
 - در گام ۲: حذف دستور `staticfiles/` همراه با خود پوشه و کامنت مربوط به whitenoise؛
 - در گام ۵: `data/` → `db/` و به‌روزرسانی کامنت «SQLite safety net».
 
-**Evidence**: `.gitignore:14-21` (پوشه‌ی جمع‌آوری‌شده + `data/`). اگر محدوده‌ی داده به‌روز نشود، `db.sqlite3`، ۱۳۵ تصویر کاربر و فایل کهنه‌ی Flask (`data/watch_inventory.db`) قابل commit می‌شوند.
+**Evidence**: `.gitignore:14-21` (پوشه‌ی جمع‌آوری‌شده + `data/`). اگر محدوده‌ی داده به‌روز نشود، `db.sqlite3`، ۱۳۹ تصویر کاربر و فایل کهنه‌ی Flask (`data/watch_inventory.db`) قابل commit می‌شوند.
 
 **Rationale**: FR-012 صریح است؛ `db/` جانشین `data/` می‌شود و نسخه‌ی کهنه‌ی Flask (`data/watch_inventory.db`) هم جزو همان مجموعه‌ی داده است و با آن جابه‌جا می‌شود.
 

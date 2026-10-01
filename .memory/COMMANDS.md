@@ -3,6 +3,26 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-01 — Refactor preflight: baseline numbers + rescue net (16:47–16:49)
+```bash
+git --no-pager status --short                       # empty (clean tree)
+.venv/bin/python manage.py check                    # no issues
+.venv/bin/python manage.py test 2>&1 | tail -4      # Found 147 test(s) + OK
+ls data/images | wc -l                              # 139   (artifacts say 135 -> stale, see NOTE)
+ls data/backups | wc -l ; ls data/exports | wc -l   # 42 ; 54
+sha256sum data/db.sqlite3                           # f753fc1cc299f31762d4c9a2b8751af27c0300dfb933abcda7a008b8cf69444f
+rm -rf /tmp/tiko-preflight && mkdir -p /tmp/tiko-preflight && cp -a data /tmp/tiko-preflight/data
+tar czf /tmp/tiko-preflight/code.tgz manage.py requirements.txt tikotime inventory tests static templates README.md .gitignore
+find /tmp/tiko-preflight/data/images -maxdepth 1 -type f | wc -l   # 139 (matches repo)
+sha256sum /tmp/tiko-preflight/data/db.sqlite3       # same hash as repo (verified)
+# NOTE (found during preflight): the test suite writes 2 x 58-byte PNGs into the REAL
+# data/images/ on every run — tests/test_services_misc.py:90,100 call
+# services.save_upload() without override_settings(IMG_DIR=...). Orphans observed at
+# 2026-09-17, 09-27, 09-28, 09-29 and 10-01 (58 bytes = that file's 1x1 PNG constant).
+# Consequence: live image count is 139, so the step-5 gate must compare the image SET
+# before vs after the move instead of a hardcoded 135.
+```
+
 ## 2026-09-06 — Git initialized, initial commit (session IV)
 ```bash
 git init -b main                                   # .git created (root-owned dir → dubious-ownership fix below)

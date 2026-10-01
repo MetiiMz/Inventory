@@ -10,14 +10,14 @@
 |---|---|---|---|---|
 | داده‌ی اجرایی (ریشه) | `db/` | `DATA_DIR` | `settings.py` در زمان import (mkdir خودکار) | نادیده گرفته می‌شود (`db/`) |
 | پایگاه‌داده | `db/db.sqlite3` | `DB_PATH` (قابل override با `TIKOTIME_DB`) | ORM + `dbhelpers` (raw sqlite) | نادیده |
-| تصاویر آپلودشده | `db/images/` (۱۳۵ فایل موجود) | `IMG_DIR` | `services.save_upload`، `compat.serve_image`، `utils.remove_image` | نادیده |
+| تصاویر آپلودشده | `db/images/` (۱۳۹ فایل موجود) | `IMG_DIR` | `services.save_upload`، `compat.serve_image`، `utils.remove_image` | نادیده |
 | پشتیبان‌ها | `db/backups/` | `BACKUP_DIR` | `dbhelpers`، `compat` | نادیده |
 | خروجی‌های اکسپورت | `db/exports/` | `DATA_DIR` + کمکی `_export_dir()` در `services/export_import.py` (**منبع واحد**؛ تنظیم مستقل `EXPORT_DIR` کنار گذاشته شد تا `override_settings(DATA_DIR=...)` — که تست‌های موجود به آن تکیه دارند — بی‌اثر نشود) | `services.export_data_file`, `import_template_file` | نادیده |
 | دارایی‌های نمایشی | `frontend/static/{css,js,fonts}` | `STATIC_DIR` + `STATICFILES_DIRS` | استایتیک‌فایندرها + مسیر استاتیک صریح (R3) | **در مخزن** |
 | قالب‌ها | `frontend/templates/*.html` (۹ فایل) | `TEMPLATES[0]["DIRS"]` | موتور Jinja2 | **در مخزن** |
 | کد برنامه | `backend/{manage.py,requirements.txt,tests/,tikotime/,inventory/}` | `BASE_DIR` | پایتون (`sys.path[0]` = `backend/`) | **در مخزن** |
 
-**قاعده‌ی اعتبارسنجی (FR-004)**: هر مسیر بالا فقط از `tikotime/settings.py` مشتق می‌شود؛ هیچ ماژولی نباید مسیر را از موقعیت فایل خودش بسازد. نقضِ امروزی: `inventory/utils.py:9-12` (از `__file__`) و `tikotime/jinja.py:38` (هارد‌کد `BASE_DIR/static`).
+**قاعده‌ی اعتبارسنجی (FR-004)**: هر مسیر بالا فقط از `tikotime/settings.py` مشتق می‌شود؛ هیچ ماژولی نباید مسیر را از موقعیت فایل خودش بسازد. نقضِ امروزی: `inventory/utils.py:9-12` (از `__file__`) و `tikotime/jinja.py:38` (هارد‌کد `BASE_DIR/static`). و در گام ۵، **مجموعه‌ی** تصاویر پیش/پس از جابه‌جایی MUST صفر اختلاف بدهد (مقایسه با عدد ثابت مجاز نیست؛ چون تست‌های موجود در هر اجرا ۲ فایل ۵۸بایتی در داده‌ی واقعی می‌سازند — بخش Known issues در `.memory/INDEX.md`).
 
 **جابه‌جایی**: `data/` یک‌جا به `db/` منتقل می‌شود (شامل فایل کهنه‌ی Flask `data/watch_inventory.db`)؛ محتوای هیچ فایلی تغییر نمی‌کند (FR-011). مجموعه‌ی داده تحت کنترل نسخه نیست، پس جابه‌جایی `mv` ساده است نه مهاجرت داده.
 
