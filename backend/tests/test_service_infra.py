@@ -87,7 +87,7 @@ class PaymentWriteTests(TestCase):
         sale = Sale.objects.create(
             product=product, sale_price=1, purchase_price=1, profit=0,
             sale_date=today_iso(), customer="x", customer_phone="09123456789",
-            final_price=1, is_settled=False)
+            is_settled=False)
         pay = make_payment(sale=sale)
         services.update_payment(pay, {"paid_amount": "1000"})
         pay.refresh_from_db()
@@ -129,7 +129,7 @@ class PaymentWriteTests(TestCase):
         sale = Sale.objects.create(
             product=product, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            final_price=1500, paid_cash=500, payment_type="deposit",
+            paid_cash=500, payment_type="deposit",
             is_settled=False)
         pay = make_payment(sale=sale, product=product, total_amount=1500,
                            paid_amount=500)

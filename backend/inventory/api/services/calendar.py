@@ -66,7 +66,7 @@ def calendar_month(jy_raw, jm_raw) -> dict:
             "customer": s.customer,
             "customer_phone": s.customer_phone or "",
             "customer_phone_fa": fa_num(s.customer_phone or ""),
-            "price_display": fa_money(s.final_price or s.sale_price),
+            "price_display": fa_money(s.sale_price),
         })
     repairs_in = Repair.objects.filter(
         delivery_date__gte=start, delivery_date__lte=end).order_by("delivery_date")

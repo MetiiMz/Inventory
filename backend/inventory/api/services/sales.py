@@ -18,7 +18,7 @@ from .common import (
 
 
 _SALE_SORT = {
-    "date": "sale_date", "name": "product__name", "final_price": "final_price",
+    "date": "sale_date", "name": "product__name",
     "profit": "profit", "office_code": "product__office_code",
     "customer": "customer",
 }
@@ -107,11 +107,9 @@ def create_sale(payload) -> Sale:
     if product is None:
         raise ApiError(404, "محصول یافت نشد")
 
-    sale_price = to_float(payload.get("sale_price"), product.sale_price)
-    discount = to_float(payload.get("discount_price"), 0)
-    final_price = discount if discount > 0 else sale_price
-    if final_price > sale_price:
-        raise ApiError(400, "قیمت نهایی نمی‌تواند از قیمت فروش بیشتر باشد")
+    sale_price = to_float(payload.get("sale_price"), 0.0)
+    if sale_price <= 0:
+        raise ApiError(400, "قیمت فروش را وارد کنید")
 
     paid_cash = max(0.0, to_float(payload.get("paid_cash")))
     paid_pos = max(0.0, to_float(payload.get("paid_pos")))
@@ -140,21 +138,21 @@ def create_sale(payload) -> Sale:
     if payment_kind == "deposit":
         if paid_now <= 0:
             raise ApiError(400, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
-        if paid_now > final_price + 0.001:
-            raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت نهایی بیشتر باشد "
-                                f"({fa_money(final_price)} تومان)")
+        if paid_now > sale_price + 0.001:
+            raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                f"({fa_money(sale_price)} تومان)")
         is_settled = False
     else:
-        if paid_now > final_price + 0.001:
-            raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت نهایی بیشتر باشد "
-                                f"({fa_money(final_price)} تومان)")
+        if paid_now > sale_price + 0.001:
+            raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                f"({fa_money(sale_price)} تومان)")
         # a complete cash sale; without a breakdown everything counts as cash
         if paid_now <= 0:
-            paid_cash, paid_pos, paid_card2card = final_price, 0.0, 0.0
+            paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
         payment_kind = "cash"
         is_settled = True
 
-    profit = final_price - (product.purchase_price or 0)
+    profit = sale_price - (product.purchase_price or 0)
 
     with transaction.atomic():
         sale = Sale.objects.create(
@@ -162,7 +160,7 @@ def create_sale(payload) -> Sale:
             purchase_price=product.purchase_price, profit=profit,
             sale_date=parsed, customer=customer,
             customer_phone=customer_phone, sale_type=sale_type,
-            payment_type=payment_kind, final_price=final_price,
+            payment_type=payment_kind,
             paid_cash=paid_cash, paid_pos=paid_pos,
             paid_card2card=paid_card2card, is_settled=is_settled,
             notes=clean(payload.get("notes")), invoice_code=manual_invoice,
@@ -171,10 +169,10 @@ def create_sale(payload) -> Sale:
             Payment.objects.create(
                 sale=sale, product=product, product_name=product.name,
                 customer_name=customer, customer_phone=customer_phone,
-                total_amount=final_price, paid_amount=paid_now,
+                total_amount=sale_price, paid_amount=paid_now,
                 pay_date=parsed,
                 notes=f"بیعانه فروش #{sale.id} — مانده: "
-                      f"{fa_money(final_price - paid_now)} تومان",
+                      f"{fa_money(sale_price - paid_now)} تومان",
             )
         # this watch is sold — it becomes out-of-stock
         Product.objects.filter(id=pid).update(available=False)
@@ -194,36 +192,28 @@ def update_sale(sale: Sale, payload) -> Sale:
         "paid_card2card", "sale_date", "customer", "customer_phone",
         "sale_type", "payment_type", "purchase_price", "notes",
     ))
-    # discount_price is a payload alias of final_price, not a model column
-    payload.setdefault("discount_price", sale.final_price or 0)
     product = sale.product
 
-    sale_price = to_float(payload.get("sale_price"), sale.sale_price)
+    sale_price = to_float(payload.get("sale_price"), 0.0)
+    if sale_price <= 0:
+        raise ApiError(400, "قیمت فروش را وارد کنید")
     payment_kind = clean(payload.get("payment_type")) or sale.payment_type
     if payment_kind not in ("cash", "deposit"):
         payment_kind = "cash"
-    if payment_kind == "deposit":
-        final_price = to_float(payload.get("discount_price"),
-                               sale.final_price or sale_price)
-    else:
-        discount = to_float(payload.get("discount_price"), 0)
-        final_price = discount if discount > 0 else sale_price
-    if final_price > sale_price:
-        raise ApiError(400, "قیمت نهایی نمی‌تواند از قیمت فروش بیشتر باشد")
 
     paid_cash = max(0.0, to_float(payload.get("paid_cash"), sale.paid_cash))
     paid_pos = max(0.0, to_float(payload.get("paid_pos"), sale.paid_pos))
     paid_card2card = max(0.0, to_float(payload.get("paid_card2card"), sale.paid_card2card))
     paid_now = paid_cash + paid_pos + paid_card2card
-    if paid_now > final_price + 0.001:
-        raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت نهایی بیشتر باشد "
-                            f"({fa_money(final_price)} تومان)")
+    if paid_now > sale_price + 0.001:
+        raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                            f"({fa_money(sale_price)} تومان)")
     if paid_now <= 0 and payment_kind == "cash":
-        paid_cash, paid_pos, paid_card2card = final_price, 0.0, 0.0
+        paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
 
     purchase_price = to_float(payload.get("purchase_price"),
                               product.purchase_price if product else 0)
-    profit = final_price - purchase_price
+    profit = sale_price - purchase_price
 
     sale_date = clean(payload.get("sale_date")) or sale.sale_date
     parsed = _parse_iso_or_raise(sale_date, "تاریخ فروش معتبر نیست")
@@ -236,7 +226,6 @@ def update_sale(sale: Sale, payload) -> Sale:
     _validate_buyer(customer, customer_phone)
 
     sale.sale_price = sale_price
-    sale.final_price = final_price
     sale.profit = profit
     sale.notes = clean(payload.get("notes"))
     old_date = sale.sale_date

@@ -90,10 +90,14 @@ class SalePaymentDictTests(TestCase):
         s = Sale.objects.create(
             product=p, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            final_price=1400, paid_cash=400, paid_pos=0, paid_card2card=0,
+            paid_cash=400, paid_pos=0, paid_card2card=0,
             payment_type="deposit", is_settled=False, invoice_code="")
         d = utils.sale_dict(s, p)
-        self.assertEqual(d["final_price"], 1400)
+        # Spec-002: the discounted final-price keys are gone entirely
+        self.assertNotIn("final_price", d)
+        self.assertNotIn("final_price_display", d)
+        self.assertEqual(d["sale_price"], 1500)
+        self.assertEqual(d["sale_price_display"], utils.fa_money(1500))
         self.assertEqual(d["paid_total"], 400)
         self.assertEqual(d["invoice_code"], utils.invoice_code(s.id, s.sale_date))
         self.assertIn("نقدی", d["paid_breakdown_fa"])
@@ -106,8 +110,7 @@ class SalePaymentDictTests(TestCase):
         # but the dict builder must still tolerate a missing product).
         s = Sale(
             product_id=None, sale_price=1, purchase_price=1, profit=0,
-            sale_date=today_iso(), customer="x", customer_phone="09123456789",
-            final_price=1)
+            sale_date=today_iso(), customer="x", customer_phone="09123456789")
         d = utils.sale_dict(s, None)
         self.assertEqual(d["product_name"], "")
         self.assertEqual(d["brand"], "")

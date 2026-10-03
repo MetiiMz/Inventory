@@ -76,10 +76,15 @@ class CompatSaleContractTests(TestCase):
         self.assertEqual(set(body.keys()), {"items", "summary"})
         self.assertEqual(body["summary"]["count"], 1)
         row = body["items"][0]
-        for key in ("product_image", "product_name", "final_price_display",
+        for key in ("product_image", "product_name", "sale_price_display",
                     "profit_display", "sale_date_fa", "paid_total",
                     "customer_phone_fa", "invoice_code", "is_settled"):
             self.assertIn(key, row)
+        self.assertNotIn("final_price", row)
+        self.assertNotIn("final_price_display", row)
+        # Spec-002: the summary totals the entered sale price
+        self.assertNotIn("total_final", body["summary"])
+        self.assertEqual(body["summary"]["total_sale"], 1500000)
 
     def test_next_code_and_create(self):
         r = self.client.get("/api/sales", {"next_code": "1"})

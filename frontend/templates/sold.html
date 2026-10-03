@@ -47,7 +47,6 @@
   <select class="input" id="sort-by" style="max-width:170px">
     <option value="date">تاریخ فروش</option>
     <option value="name">نام ساعت</option>
-    <option value="final_price">قیمت نهایی</option>
     <option value="profit">سود</option>
     <option value="office_code">کد دفتر فروشگاه</option>
     <option value="customer">خریدار</option>
@@ -132,13 +131,8 @@
         <input type="hidden" name="payment_type" value="cash">
         <div class="form-grid" style="grid-template-columns:1fr">
           <div class="field">
-            <label>قیمت فروش (تومان)</label>
-            <input class="input" name="sale_price" inputmode="numeric">
-          </div>
-          <div class="field">
-            <label>قیمت نهایی با تخفیف (تومان) — اختیاری</label>
-            <input class="input" name="discount_price" inputmode="numeric">
-            <span class="hint">اگر تخفیف داده‌اید، فقط قیمت نهایی را وارد کنید</span>
+            <label>قیمت فروش (تومان) *</label>
+            <input class="input" name="sale_price" inputmode="numeric" required placeholder="قیمت فروش را وارد کنید">
           </div>
           <div class="field">
             <label>نوع پرداخت</label>

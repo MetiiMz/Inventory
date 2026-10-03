@@ -27,7 +27,7 @@ def api_sales(request):
     items = [sale_dict(s) for s in rows]
     summary = {
         "count": len(items),
-        "total_final": sum(x.get("final_price") or 0 for x in items),
+        "total_sale": sum(x.get("sale_price") or 0 for x in items),
         "total_profit": sum(x.get("profit") or 0 for x in items),
     }
     return JsonResponse({"items": items, "summary": summary})

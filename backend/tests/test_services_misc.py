@@ -53,8 +53,7 @@ class CalendarServiceTests(TestCase):
         p = make_product(purchase_date=self.mid)
         Sale.objects.create(
             product=p, sale_price=1, purchase_price=1, profit=0,
-            sale_date=self.mid, customer="x", customer_phone="09123456789",
-            final_price=1)
+            sale_date=self.mid, customer="x", customer_phone="09123456789")
         Repair.objects.create(watch_name="W", customer_name="C",
                               delivery_date=self.mid, status="received")
         data = services.calendar_day(self.mid)

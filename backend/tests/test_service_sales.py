@@ -25,11 +25,11 @@ class SaleQuerysetTests(TestCase):
         self.cash = Sale.objects.create(
             product=self.p1, sale_price=100, purchase_price=50, profit=50,
             sale_date="2026-09-01", customer="Ali", customer_phone="09120000001",
-            final_price=100, paid_cash=100, payment_type="cash", is_settled=True)
+            paid_cash=100, payment_type="cash", is_settled=True)
         self.deposit = Sale.objects.create(
             product=self.p2, sale_price=200, purchase_price=50, profit=150,
             sale_date="2026-09-02", customer="Mary", customer_phone="09120000002",
-            final_price=200, paid_cash=50, payment_type="deposit",
+            paid_cash=50, payment_type="deposit",
             is_settled=False)
 
     def test_deposit_sales_are_always_listed(self):
@@ -101,21 +101,32 @@ class SaleCreateTests(TestCase):
         self.assertEqual(receipt.total_amount, 1500000)
         self.assertIn("مانده", receipt.notes)
 
-    def test_discount_sets_final_price(self):
+    def test_discount_payload_is_ignored(self):
+        # Spec-002: there is no discount concept — the entered price stands.
         p = make_product()
         sale, _ = call(services.create_sale, sale_payload(
             p.id, discount_price="1400000"))
-        self.assertEqual(sale.final_price, 1400000)
-        self.assertEqual(sale.profit, 400_000)
+        self.assertEqual(sale.sale_price, 1_500_000)
+        self.assertEqual(sale.profit, 500_000)
+
+    def test_missing_price_rejected_saves_nothing(self):
+        p = make_product()
+        for payload in (sale_payload(p.id, sale_price=""),
+                        sale_payload(p.id, sale_price="0")):
+            _, err = call(services.create_sale, payload)
+            self.assertEqual(err.status_code, 400)
+            self.assertIn("قیمت فروش را وارد کنید", err.message)
+        self.assertEqual(Sale.objects.count(), 0)
+        self.assertTrue(Product.objects.get(id=p.id).available)
 
     def test_validation_errors(self):
         p = make_product()
         cases = [
             (sale_payload(p.id, customer=""), "نام خریدار"),
             (sale_payload(p.id, customer_phone="123"), "شماره تماس"),
-            (sale_payload(p.id, sale_price="2000000", discount_price="2500000"),
-             "قیمت نهایی"),
-            (sale_payload(p.id, paid_cash="99999999"), "قیمت نهایی"),
+            (sale_payload(p.id, sale_price=""), "قیمت فروش را وارد کنید"),
+            (sale_payload(p.id, sale_price="0"), "قیمت فروش را وارد کنید"),
+            (sale_payload(p.id, paid_cash="99999999"), "قیمت فروش"),
             (sale_payload(99999), "محصول یافت نشد"),
             (sale_payload(None), "محصول انتخاب نشده است"),
             (sale_payload(p.id, sale_date="31/31/9999"), "تاریخ فروش"),
@@ -159,13 +170,32 @@ class SaleUpdateDeleteTests(TestCase):
 
     def test_update_prices_and_fields(self):
         services.update_sale(self.sale, {
-            "sale_price": "1600000", "discount_price": "1500000",
+            "sale_price": "1700000",
             "customer": "مریم", "notes": "edited",
         })
         self.sale.refresh_from_db()
-        self.assertEqual(self.sale.final_price, 1500000)
+        self.assertEqual(self.sale.sale_price, 1700000)
+        self.assertEqual(self.sale.profit, 700_000)
         self.assertEqual(self.sale.customer, "مریم")
         self.assertEqual(self.sale.notes, "edited")
+
+    def test_update_overpayment_rejected_against_new_price(self):
+        _, err = call(services.update_sale, self.sale,
+                      {"sale_price": "1000000", "paid_cash": "2000000"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("قیمت فروش", err.message)
+        self.sale.refresh_from_db()
+        self.assertEqual(self.sale.sale_price, 1500000)  # unchanged
+
+    def test_update_deposit_price_keeps_stored_receipt(self):
+        dep_sale = Sale.objects.filter(payment_type="deposit").first()
+        receipt = Payment.objects.get(sale=dep_sale)
+        services.update_sale(dep_sale, {"sale_price": "900000"})
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.paid_amount, 500000)  # stored amount kept
+        dep_sale.refresh_from_db()
+        self.assertEqual(dep_sale.sale_price, 900000)
+        self.assertEqual(dep_sale.profit, -100000)     # 900000 - 1000000
 
     def test_update_date_syncs_receipt(self):
         receipt = Payment.objects.filter(sale_id=self.sale.id).first()
@@ -183,7 +213,7 @@ class SaleUpdateDeleteTests(TestCase):
         services.update_sale(self.sale, {"notes": "only-note"})
         self.sale.refresh_from_db()
         self.assertEqual(self.sale.customer, "علی")
-        self.assertEqual(self.sale.final_price, 1500000)
+        self.assertEqual(self.sale.sale_price, 1500000)
 
     def test_update_validation_still_applies(self):
         _, err = call(services.update_sale, self.sale, {"customer": ""})

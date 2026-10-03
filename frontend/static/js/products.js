@@ -298,11 +298,10 @@ function openSaleModal(p) {
       ? `<img class="thumb" src="/data/images/${encodeURIComponent(p.image)}" alt="">`
       : `<span class="thumb"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/></svg></span>`}
     <div><div class="p-name">${esc(p.name)}</div><div class="p-ref">کد دفتر: ${esc(p.office_code)}</div></div>`;
-  form.querySelector('[name="sale_price"]').value = moneyIn(p.sale_price);
+  form.querySelector('[name="sale_price"]').value = "";
   form.querySelector('[name="sale_date"]').value = todayJalaliStr();
   form.querySelector('[name="customer_phone"]').value = "";
   form.querySelector('[name="sale_type"]').value = "person";
-  form.querySelector('[name="discount_price"]').value = "";
   form.querySelector('[name="paid_cash"]').value = "";
   form.querySelector('[name="paid_pos"]').value = "";
   form.querySelector('[name="paid_card2card"]').value = "";
@@ -341,36 +340,23 @@ function parseMoneyInput(el) {
 function updateSaleHints() {
   const form = $("#sale-form");
   const type = form.querySelector('[name="payment_type"]').value;
-  const base = saleProductData ? (saleProductData.sale_price || 0) : 0;
-  const total = parseMoneyInput(form.querySelector('[name="sale_price"]')) || base;
+  const total = parseMoneyInput(form.querySelector('[name="sale_price"]'));
 
-  const dHint = $("#discount-hint");
   const bdHint = $("#paid-breakdown-hint");
   const paid = parseMoneyInput(form.querySelector('[name="paid_cash"]')) +
     parseMoneyInput(form.querySelector('[name="paid_pos"]')) +
     parseMoneyInput(form.querySelector('[name="paid_card2card"]'));
 
-  const finalPrice = type === "deposit" ? total
-    : (parseMoneyInput(form.querySelector('[name="discount_price"]')) || total);
-
   if (bdHint) {
     if (paid > 0) {
-      bdHint.textContent = paid > finalPrice + 0.001
-        ? `جمع پرداخت‌ها نمی‌تواند از قیمت نهایی (${faMoney(finalPrice)}) بیشتر باشد`
-        : `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, finalPrice - paid))} تومان` : ""}`;
+      bdHint.textContent = paid > total + 0.001
+        ? `جمع پرداخت‌ها نمی‌تواند از قیمت فروش (${faMoney(total)}) بیشتر باشد`
+        : `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
     } else if (type === "deposit") {
       bdHint.textContent = "برای بیعانه، دست‌کم یکی از مبالغ را وارد کنید";
     } else {
       bdHint.textContent = "اگر خالی بماند، کل مبلغ نقدی ثبت می‌شود";
     }
-  }
-  if (dHint) {
-    const disc = parseMoneyInput(form.querySelector('[name="discount_price"]'));
-    dHint.textContent = disc > 0
-      ? (disc < total
-          ? `تخفیف: ${faMoney(total - disc)} تومان — قیمت نهایی: ${faMoney(disc)} تومان`
-          : "قیمت نهایی باید کمتر یا مساوی قیمت فروش باشد")
-      : `قیمت نهایی: ${faMoney(total)} تومان`;
   }
 }
 
@@ -385,7 +371,7 @@ $("#sale-payment-chips").addEventListener("click", (e) => {
   updateSalePaymentFields();
 });
 $("#sale-form").addEventListener("input", (e) => {
-  if (["discount_price", "paid_cash", "paid_pos", "paid_card2card", "sale_price"].includes(e.target.name)) {
+  if (["paid_cash", "paid_pos", "paid_card2card", "sale_price"].includes(e.target.name)) {
     updateSaleHints();
   }
 });
@@ -404,13 +390,12 @@ $("#btn-save-sale").addEventListener("click", async () => {
   }
   const payload = {
     product_id: saleProductId,
-    sale_price: toEnDigits(form.querySelector('[name="sale_price"]').value).replace(/[^\d]/g, "") || "0",
+    sale_price: toEnDigits(form.querySelector('[name="sale_price"]').value).replace(/[^\d]/g, "") || "",
     sale_date: form.querySelector('[name="sale_date"]').value,
     customer: form.querySelector('[name="customer"]').value,
     customer_phone: toEnDigits(form.querySelector('[name="customer_phone"]').value).trim(),
     sale_type: form.querySelector('[name="sale_type"]').value,
     payment_type: paymentType,
-    discount_price: toEnDigits(form.querySelector('[name="discount_price"]').value).replace(/[^\d]/g, "") || "0",
     paid_cash: String(paidCash),
     paid_pos: String(paidPos),
     paid_card2card: String(paidCard2card),
@@ -562,7 +547,7 @@ $("#btn-run-import").addEventListener("click", async () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   $$("#product-form [name='purchase_price'], #product-form [name='sale_price'], "
-    + "#sale-form [name='sale_price'], #sale-form [name='discount_price'], "
+    + "#sale-form [name='sale_price'], "
     + "#sale-form [name='paid_cash'], #sale-form [name='paid_pos'], "
     + "#sale-form [name='paid_card2card']")
     .forEach(bindMoneyInput);

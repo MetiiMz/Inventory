@@ -25,7 +25,6 @@ def make_product(**overrides):
         "office_code": f"OF-{seq}",
         "website_code": f"WS-{seq}",
         "purchase_price": 1_000_000.0,
-        "sale_price": 1_500_000.0,
         "purchase_date": today_iso(),
         "brand": "",
         "supplier": "",
@@ -45,7 +44,6 @@ def product_payload(**overrides):
         "office_code": f"OF-P{seq}",
         "website_code": f"WS-P{seq}",
         "purchase_price": "2000000",
-        "sale_price": "3000000",
     }
     payload.update(overrides)
     return payload

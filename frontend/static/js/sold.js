@@ -46,7 +46,7 @@ function render() {
 
   $("#summary-chips").innerHTML =
     `<span class="chip active plain" style="cursor:default">${faNum(summary.count || 0)} فقره</span>` +
-    `<span class="chip plain" style="cursor:default">جمع فروش: ${faMoney(summary.total_final)}</span>` +
+    `<span class="chip plain" style="cursor:default">جمع فروش: ${faMoney(summary.total_sale)}</span>` +
     `<span class="chip plain" style="cursor:default">جمع سود: ${faMoney(summary.total_profit)}</span>`;
 
   updateBulkBar();
@@ -82,7 +82,7 @@ function render() {
       </td>
       <td>${esc(s.customer) || '<span class="muted">—</span>'}</td>
       <td class="muted" dir="ltr" style="text-align:right">${s.customer_phone_fa || '—'}</td>
-      <td class="num" style="color:var(--green);font-weight:600">${s.final_price_display}</td>
+      <td class="num" style="color:var(--green);font-weight:600">${s.sale_price_display}</td>
       <td class="muted">${s.sale_date_fa}</td>
       <td>
         <div class="row-actions">
@@ -194,11 +194,6 @@ function showSaleDetail(s) {
   add("کد فاکتور", s.invoice_code ? `<span class="code-pill">${esc(s.invoice_code)}</span>` : "");
   add("تاریخ فروش", s.sale_date_fa);
   add("قیمت فروش", `${s.sale_price_display} تومان`);
-  if (s.final_price && s.final_price !== s.sale_price) {
-    add("قیمت نهایی (با تخفیف)", `${s.final_price_display} تومان`);
-    add("میزان تخفیف", `${faMoney(s.sale_price - s.final_price)} تومان`);
-  }
-  add("قیمت پرداخت‌شده توسط خریدار", `${s.final_price_display} تومان`);
   add("سود این فروش", `${s.profit_display} تومان`);
   add("قیمت خرید ساعت", `${s.purchase_price_display} تومان`);
   add("برند", esc(s.brand));
@@ -226,8 +221,6 @@ function openEditModal(s) {
   const form = $("#sale-edit-form");
   form.reset();
   form.querySelector('[name="sale_price"]').value = s.sale_price ? faNum(Number(s.sale_price).toLocaleString("en-US")) : "";
-  form.querySelector('[name="discount_price"]').value =
-    (s.final_price && s.final_price !== s.sale_price) ? faNum(Number(s.final_price).toLocaleString("en-US")) : "";
   form.querySelector('[name="paid_cash"]').value = s.paid_cash ? faNum(Number(s.paid_cash).toLocaleString("en-US")) : "";
   form.querySelector('[name="paid_pos"]').value = s.paid_pos ? faNum(Number(s.paid_pos).toLocaleString("en-US")) : "";
   form.querySelector('[name="paid_card2card"]').value = s.paid_card2card ? faNum(Number(s.paid_card2card).toLocaleString("en-US")) : "";
@@ -254,7 +247,7 @@ $("#btn-save-edit").addEventListener("click", async () => {
   if (!form.reportValidity()) return;
   const payload = {};
   new FormData(form).forEach((v, k) => { payload[k] = v; });
-  ["sale_price", "discount_price", "paid_cash", "paid_pos", "paid_card2card"].forEach((k) => {
+  ["sale_price", "paid_cash", "paid_pos", "paid_card2card"].forEach((k) => {
     payload[k] = toEnDigits(payload[k] || "0").replace(/[^\d]/g, "") || "0";
   });
   payload.customer_phone = toEnDigits(payload.customer_phone || "").trim();

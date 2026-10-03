@@ -28,7 +28,7 @@ class CalendarSaleConsistencyTests(TestCase):
 
     def _mk_sale(self, pid, **extra):
         payload = {
-            "product_id": pid, "payment_type": "cash",
+            "product_id": pid, "payment_type": "cash", "sale_price": "150",
             "customer": "علی", "customer_phone": "09123456789", **extra,
         }
         r = self.client.post("/api/sales", data=payload, content_type="application/json")

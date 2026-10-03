@@ -162,7 +162,7 @@ class LegacyApiBaselineTests(TestCase):
         self.assertEqual(body["summary"]["count"], 2)
         row = next(x for x in body["items"] if x["id"] == self.sale_id)
         self.assertNamedKeys(row, (
-            "id", "product_image", "product_name", "final_price_display",
+            "id", "product_image", "product_name", "sale_price_display",
             "profit_display", "sale_date_fa", "paid_total",
             "customer_phone_fa", "invoice_code", "is_settled"))
         self.assertTrue(row["invoice_code"])
