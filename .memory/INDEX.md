@@ -15,7 +15,7 @@
 | File | Purpose | Status |
 |---|---|---|
 | `tikotime/settings.py` | Django settings (SQLite in `data/`, whitenoise) | done |
-| `tikotime/urls.py` | page routes mirroring legacy paths | done (API includes pending) |
+| `tikotime/urls.py` | page routes + the legacy-shape `/api/*` routes (the app's sole API contract) | done |
 | `tikotime/jinja.py` | Jinja2 env with fa_* helpers + template globals | done |
 | `inventory/models.py` | ORM: Setting/Product/Sale/Payment/Repair/Tracking, true PK/FK + indexes | done |
 | `inventory/utils.py` | fa_* helpers, parsers, dict serializers (legacy JSON shape) | done |

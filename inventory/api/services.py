@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Business-logic layer — the single source of truth for every write operation.
 
-All API endpoints (both the versioned DRF layer under ``/api/v1/`` and the
-legacy-shape adapters in :mod:`inventory.api.compat`) call the functions in
-this module.  Rules enforced here, exactly as they behaved before:
+The legacy-shape adapters in :mod:`inventory.api.compat` (the ``/api/*``
+routes the current frontend calls) call the functions in this module.
+Rules enforced here, exactly as they behaved before:
 
 * validation with the original Persian error messages (raised as
   :class:`ApiError`),
@@ -12,9 +12,9 @@ this module.  Rules enforced here, exactly as they behaved before:
   payments and sales),
 * file housekeeping (removing orphaned images).
 
-Reads that both API layers share (calendar events, dashboard report
-validation, Excel export/import, uploads) also live here, so the two
-layers only differ in *how* they serialize the result.
+Reads the adapters share (calendar events, dashboard report
+validation, Excel export/import, uploads) also live here, so the
+adapter layer only decides *how* to serialize the result.
 """
 import base64
 import datetime

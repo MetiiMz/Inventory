@@ -8,8 +8,7 @@ payloads (``{product: {...}}``), plain JSON arrays, ``{items, summary}``
 lists and Persian error messages in ``{"ok": false, "error": ...}``.
 
 All of them delegate to :mod:`inventory.api.services`, the single source
-of truth for business rules — the versioned DRF layer under ``/api/v1/``
-shares the very same functions.  Nothing here contains logic of its own.
+of truth for business rules.  Nothing here contains logic of its own.
 """
 import json
 import mimetypes
@@ -59,37 +58,6 @@ def _guard(fn):
 
 
 # =====================================================================
-# Pages (server-rendered HTML) — kept from the old views package
-# =====================================================================
-def _page_ctx(request, active):
-    """Context for ``base.html`` — site icon/name plus the nav badges."""
-    from django.db.models import F
-
-    from inventory.dbhelpers import get_setting
-    from inventory.models import Payment, Product, Repair, Tracking
-
-    ctx = {
-        "site_icon": get_setting("site_icon", ""),
-        "store_name": get_setting("store_name", "") or "Tick O Time",
-        "active": active,
-    }
-    if active:
-        ctx.update(
-            nav_badge_low=(
-                Product.objects.filter(available=False).count() or None),
-            nav_badge_repairs=(
-                Repair.objects.exclude(status="delivered").count() or None),
-            nav_badge_unpaid=(
-                Payment.objects.filter(
-                    total_amount__gt=F("paid_amount") + 0.001).count() or None),
-            nav_badge_tracking=(
-                Tracking.objects.exclude(
-                    status__in=["delivered", "cancelled"]).count() or None),
-        )
-    return ctx
-
-
-# =====================================================================
 # Brands / upload / images
 # =====================================================================
 @csrf_exempt
@@ -98,13 +66,6 @@ def api_brands(request):
     if request.method == "POST":
         return _guard(lambda: (services.brands_add(_body(request)), _ok())[1])
     return _guard(lambda: _ok(brands=services.brands_list()))
-
-
-@csrf_exempt
-@require_POST
-def api_brands_add(request):
-    """POST /api/brands — add a brand (legacy alias kept for clarity)."""
-    return _guard(lambda: (services.brands_add(_body(request)), _ok())[1])
 
 
 @csrf_exempt

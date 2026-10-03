@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 """URL configuration.
 
-Three kinds of routes:
+Two kinds of routes:
 
 * ``/dashboard``, ``/products`` … — HTML page shells (``inventory.views.pages``);
-* ``/api/v1/`` — the main DRF API (versioned, the backend's core contract);
-* ``/api/*``, ``/export/*``, ``/data/images/*`` — legacy-shape endpoints
-  (``inventory.api.compat``) that the current frontend calls; they share
-  the same service layer and will keep working until the frontend moves
-  to ``/api/v1/``.
+* ``/api/*``, ``/export/*``, ``/data/images/*`` — the legacy-shape
+  endpoints (``inventory.api.compat``) the current frontend calls; these
+  are the app's sole API contract, backed by the shared service layer
+  (``inventory.api.services``).
 """
-from django.urls import include, path
+from django.urls import path
 
 from inventory.api import compat
 from inventory import views
@@ -89,7 +88,4 @@ urlpatterns = [
     # settings
     path("api/settings", compat.api_settings),
     path("api/settings/site-icon", compat.api_settings_site_icon),
-
-    # ------------------------------------------------- versioned DRF API
-    path("api/v1/", include("inventory.api.urls")),
 ]

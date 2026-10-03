@@ -3,8 +3,7 @@
 
 The pages exist only to serve the (untouched) frontend shell; every piece
 of data on them is fetched client-side from the API endpoints in
-:mod:`inventory.api.compat` and the versioned layer in
-:mod:`inventory.api.views`.  The dashboard is the one page with
+:mod:`inventory.api.compat`.  The dashboard is the one page with
 server-rendered data (first paint without a fetch round-trip).
 """
 from django.db.models import F
