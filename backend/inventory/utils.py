@@ -104,7 +104,6 @@ def product_dict(r):
         "website_code": r.website_code,
         "brand": r.brand,
         "purchase_price": r.purchase_price,
-        "sale_price": r.sale_price,
         "available": 1 if r.available else 0,
         "is_available": bool(r.available),
         "supplier": r.supplier,
@@ -117,14 +116,9 @@ def product_dict(r):
         "purchase_date_fa": fa_date(r.purchase_date),
         "purchase_date_weekday": fa_date(r.purchase_date, with_weekday=True),
         "purchase_price_display": fa_money(r.purchase_price),
-        "sale_price_display": fa_money(r.sale_price),
     }
-    d["profit_per_unit"] = (r.sale_price or 0) - (r.purchase_price or 0)
-    d["profit_per_unit_display"] = fa_money(d["profit_per_unit"])
     d["total_value"] = r.purchase_price or 0
     d["total_value_display"] = fa_money(d["total_value"])
-    d["total_sale_value"] = r.sale_price or 0
-    d["total_sale_value_display"] = fa_money(d["total_sale_value"])
     d["availability_fa"] = "موجود" if r.available else "ناموجود"
     return d
 

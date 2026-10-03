@@ -169,10 +169,13 @@ class ExportImportTests(TestCase):
         import openpyxl
         wb = openpyxl.Workbook()
         ws = wb.active
-        from inventory.excel_io import PRODUCT_HEADERS
-        ws.append(PRODUCT_HEADERS)
+        # legacy 11-column shape with the removed «قیمت فروش» column — the
+        # importer must map by header and silently drop that column
+        ws.append(["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
+                   "برند", "قیمت خرید", "قیمت فروش", "وضعیت",
+                   "تأمین‌کننده", "تاریخ خرید", "یادداشت"])
         ws.append(["Test Import", "REF-1", "WS-IMP", "OF-IMP", "Brand",
-                   1000, 2000, "موجود", "sup", "1405/06/19", "note"])
+                   1000, 3000, "موجود", "sup", "1405/06/19", "note"])
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = f"{tmp}/import.xlsx"
             wb.save(tmp_path)
@@ -181,4 +184,8 @@ class ExportImportTests(TestCase):
                     f = SimpleUploadedFile("import.xlsx", fh.read())
                     stats, errors = services.import_products_file(f)
         self.assertEqual(stats["added"], 1)
-        self.assertTrue(Product.objects.filter(reference="REF-1").exists())
+        p = Product.objects.get(reference="REF-1")
+        self.assertEqual(p.purchase_price, 1000)
+        self.assertEqual(p.notes, "note")
+        # the legacy price column must not leak onto the product
+        self.assertNotEqual(getattr(p, "sale_price", 0) or 0, 3000)

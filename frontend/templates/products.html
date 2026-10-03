@@ -73,7 +73,6 @@
     <option value="name">نام ساعت</option>
     <option value="brand">برند</option>
     <option value="purchase_price">قیمت خرید</option>
-    <option value="sale_price">قیمت فروش</option>
     <option value="available">وضعیت</option>
   </select>
   <select class="input" id="sort-dir" style="max-width:120px">
@@ -108,8 +107,6 @@
           <th>کد دفتر فروشگاه</th>
           <th>برند</th>
           <th>قیمت خرید</th>
-          <th>قیمت فروش</th>
-          <th>سود واحد</th>
           <th>وضعیت</th>
           <th>تاریخ خرید</th>
           <th>تأمین‌کننده</th>
@@ -180,10 +177,6 @@
             <input class="input" name="purchase_price" inputmode="numeric" placeholder="اختیاری">
           </div>
           <div class="field">
-            <label>قیمت فروش (تومان)</label>
-            <input class="input" name="sale_price" inputmode="numeric" placeholder="0">
-          </div>
-          <div class="field">
             <label>تأمین‌کننده</label>
             <input class="input" name="supplier" placeholder="نام تأمین‌کننده">
           </div>
@@ -196,9 +189,6 @@
             <label>یادداشت</label>
             <textarea class="input" name="notes" rows="2" placeholder="اختیاری"></textarea>
           </div>
-        </div>
-        <div class="row mt-14" id="profit-preview" style="justify-content:flex-end">
-          <span class="badge blue plain" id="profit-badge"></span>
         </div>
       </form>
     </div>

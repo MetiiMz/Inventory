@@ -119,8 +119,8 @@ class LegacyApiBaselineTests(TestCase):
         self.assertNamedKeys(row, (
             "id", "name", "office_code", "website_code", "available",
             "is_available", "purchase_date_fa", "purchase_price_display",
-            "total_value", "total_sale_value", "availability_fa",
-            "profit_per_unit_display", "purchase_date_weekday"))
+            "total_value", "availability_fa",
+            "purchase_date_weekday"))
         self.assertEqual(row["name"], self.product.name)
         self.assertEqual(row["available"], 0)      # sold -> out of stock (legacy int)
 

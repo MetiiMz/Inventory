@@ -17,7 +17,7 @@ from .common import (
 _PRODUCT_SORT = {
     "office_code": "office_code", "website_code": "website_code", "name": "name",
     "brand": "brand", "supplier": "supplier", "purchase_date": "purchase_date",
-    "purchase_price": "purchase_price", "sale_price": "sale_price",
+    "purchase_price": "purchase_price",
     "available": "available", "created_at": "id",
 }
 
@@ -27,7 +27,7 @@ _PRODUCT_NOCASE = {"office_code", "website_code", "name", "brand", "supplier"}
 
 _PRODUCT_WRITE_FIELDS = (
     "name", "reference", "office_code", "website_code", "brand",
-    "purchase_price", "sale_price", "supplier", "purchase_date",
+    "purchase_price", "supplier", "purchase_date",
     "purchase_type", "notes", "image",
 )
 
@@ -106,7 +106,6 @@ def _product_values(payload):
         "website_code": website_code,
         "brand": clean(payload.get("brand")),
         "purchase_price": max(0.0, to_float(payload.get("purchase_price"))),
-        "sale_price": max(0.0, to_float(payload.get("sale_price"))),
         # one row = one watch; it becomes unavailable once sold
         "available": True,
         "supplier": clean(payload.get("supplier")),

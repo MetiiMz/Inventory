@@ -22,11 +22,11 @@ class ProductQuerysetTests(TestCase):
     def setUp(self):
         self.a = make_product(name="Rolex Alpha", office_code="OF-A",
                               website_code="WS-A", brand="Rolex",
-                              purchase_price=1000, sale_price=2000,
+                              purchase_price=1000,
                               purchase_date="2026-09-01", available=True)
         self.b = make_product(name="Omega Beta", office_code="OF-B",
                               website_code="WS-B", brand="Omega",
-                              purchase_price=3000, sale_price=4000,
+                              purchase_price=3000,
                               purchase_date="2026-09-05", available=False)
 
     def test_search_matches_name_code_brand_supplier(self):
@@ -55,10 +55,25 @@ class ProductQuerysetTests(TestCase):
         self.assertEqual(ids, [self.b.id])
 
     def test_sorting_asc_desc_and_nocase(self):
-        qs = services.product_queryset({"sort": "sale_price", "dir": "desc"})
+        qs = services.product_queryset({"sort": "purchase_price", "dir": "desc"})
         self.assertEqual(list(qs.values_list("id", flat=True)), [self.b.id, self.a.id])
         qs = services.product_queryset({"sort": "name", "dir": "asc"})
         self.assertEqual(list(qs.values_list("id", flat=True)), [self.b.id, self.a.id])
+
+    def test_sale_price_sort_key_is_gone(self):
+        # Spec-002: products no longer carry a sale price — the sort key
+        # is unknown and falls back to office_code, like any other
+        # unknown key.
+        qs = services.product_queryset({"sort": "sale_price"})
+        self.assertEqual(list(qs.values_list("id", flat=True)),
+                         list(Product.objects.order_by("office_code", "-id")
+                              .values_list("id", flat=True)))
+
+    def test_payload_sale_price_is_ignored(self):
+        p, err = call(services.create_product, product_payload(sale_price="999999"))
+        self.assertIsNone(err)
+        self.assertNotEqual(getattr(p, "sale_price", 0) or 0, 999_999.0)
+        self.assertEqual(p.purchase_price, 2_000_000.0)
 
     def test_unknown_sort_falls_back(self):
         """An unknown sort column falls back to office_code (asc)."""

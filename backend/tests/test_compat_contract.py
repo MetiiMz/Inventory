@@ -19,9 +19,11 @@ class CompatProductContractTests(TestCase):
         row = r.json()[0]
         for key in ("is_available", "available", "purchase_date_fa",
                     "purchase_price_display", "total_value",
-                    "total_sale_value", "availability_fa",
-                    "profit_per_unit_display", "purchase_date_weekday"):
+                    "availability_fa", "purchase_date_weekday"):
             self.assertIn(key, row)
+        for gone in ("sale_price", "sale_price_display", "total_sale_value",
+                     "profit_per_unit", "profit_per_unit_display"):
+            self.assertNotIn(gone, row)
 
     def test_create_wraps_in_product_and_returns_ok(self):
         r = self.client.post("/api/products", product_payload(),

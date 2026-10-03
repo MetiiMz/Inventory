@@ -14,12 +14,12 @@ from inventory.utils import STATUS_FA, TRACKING_STATUS_FA
 
 PRODUCT_HEADERS = [
     "نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
-    "برند", "قیمت خرید", "قیمت فروش", "وضعیت",
+    "برند", "قیمت خرید", "وضعیت",
     "تأمین‌کننده", "تاریخ خرید", "یادداشت",
 ]
 PRODUCT_FIELDS = [
     "name", "reference", "website_code", "office_code", "brand",
-    "purchase_price", "sale_price", "available", "supplier",
+    "purchase_price", "available", "supplier",
     "purchase_date", "notes",
 ]
 
@@ -202,7 +202,7 @@ def _product_rows():
     for r in Product.objects.order_by("office_code"):
         rows.append([
             r.name, r.reference, r.website_code, r.office_code,
-            r.brand, _money(r.purchase_price), _money(r.sale_price),
+            r.brand, _money(r.purchase_price),
             "موجود" if r.available else "ناموجود",
             r.supplier, _jdate_from_iso(r.purchase_date),
             r.notes,
@@ -237,17 +237,17 @@ def _read_csv(filepath, expected_headers):
         except UnicodeDecodeError:
             continue
     if text is None:
-        return None, "انکودینگ فایل قابل خواندن نبود"
+        return None, None, "انکودینگ فایل قابل خواندن نبود"
     sample = text[:4096]
     delim = ";" if sample.count(";") > sample.count(",") else ","
     reader = csv.reader(io.StringIO(text), delimiter=delim)
     all_rows = [r for r in reader if any((c or "").strip() for c in r)]
     if not all_rows:
-        return None, "فایل خالی است"
+        return None, None, "فایل خالی است"
     header = [h.strip() for h in all_rows[0]]
     if not _headers_match(header, expected_headers):
-        return None, "سرستون‌های فایل با قالب استاندارد مطابقت ندارد. لطفاً ابتدا خروجی نمونه بگیرید."
-    return all_rows[1:], None
+        return None, None, "سرستون‌های فایل با قالب استاندارد مطابقت ندارد. لطفاً ابتدا خروجی نمونه بگیرید."
+    return all_rows[1:], header, None
 
 
 def _read_xlsx(filepath, expected_headers):
@@ -261,15 +261,15 @@ def _read_xlsx(filepath, expected_headers):
         if any(str(v).strip() for v in vals):
             all_rows.append(vals)
     if not all_rows:
-        return None, "فایل خالی است"
+        return None, None, "فایل خالی است"
     header = [str(h).strip() for h in all_rows[0]]
     if not _headers_match(header, expected_headers):
-        return None, "سرستون‌های فایل با قالب استاندارد مطابقت ندارد. لطفاً ابتدا خروجی نمونه بگیرید."
-    return all_rows[1:], None
+        return None, None, "سرستون‌های فایل با قالب استاندارد مطابقت ندارد. لطفاً ابتدا خروجی نمونه بگیرید."
+    return all_rows[1:], header, None
 
 
 def _read_table(filepath, expected_headers):
-    """CSV یا XLSX را می‌خواند و لیستی از ردیف‌ها (بدون سرستون) برمی‌گرداند."""
+    """CSV یا XLSX را می‌خواند؛ بازگشت: (ردیف‌ها بدون سرستون, سرستون, خطا)."""
     ext = os.path.splitext(filepath)[1].lower()
     if ext == ".csv":
         return _read_csv(filepath, expected_headers)
@@ -283,15 +283,28 @@ def import_products(filepath, update_existing=True):
     ورود محصولات از CSV یا XLSX.
     بازگشت: (ok, آمار, خطاها[])
     """
-    rows, err = _read_table(filepath, PRODUCT_HEADERS)
+    rows, header, err = _read_table(filepath, PRODUCT_HEADERS)
     if err:
         return False, None, err
+
+    # ستون‌ها بر اساس سرستون شناسایی می‌شوند — ستون‌های اضافه/قدیمی
+    # (مثل «قیمت فروش» در خروجی‌های قدیمی) نادیده گرفته می‌شوند
+    field_by_header = dict(zip(PRODUCT_HEADERS, PRODUCT_FIELDS))
+    col_idx = {}  # field -> index in the file row
+    for i, h in enumerate(header):
+        field = field_by_header.get(str(h).strip())
+        if field is not None:
+            col_idx[field] = i
+
+    def cell(row, field):
+        i = col_idx.get(field)
+        return str(row[i]) if i is not None and i < len(row) else ""
 
     stats = {"added": 0, "updated": 0, "skipped": 0}
     errors = []
     for i, row in enumerate(rows, 2):  # شروع از سطر ۲ (بعد از سرستون)
         try:
-            rec = dict(zip(PRODUCT_FIELDS, row))
+            rec = {f: cell(row, f) for f in PRODUCT_FIELDS}
             name = str(rec.get("name") or "").strip()
             if not name:
                 stats["skipped"] += 1
@@ -312,13 +325,9 @@ def import_products(filepath, update_existing=True):
                 purchase_price = float(str(rec.get("purchase_price") or 0).replace(",", "") or 0)
             except ValueError:
                 purchase_price = 0
-            try:
-                sale_price = float(str(rec.get("sale_price") or 0).replace(",", "") or 0)
-            except ValueError:
-                sale_price = 0
 
             # وضعیت در فایل: «موجود» / «ناموجود» (یا تعداد در فایل‌های قدیمی)
-            raw_status = str(rec.get("available") or rec.get("quantity") or "").strip()
+            raw_status = (cell(row, "available") or cell(row, "quantity") or "").strip()
             if raw_status in ("موجود", "1", 1, "true", "True"):
                 available = True
             elif raw_status in ("ناموجود", "0", 0, "false", "False"):
@@ -338,7 +347,6 @@ def import_products(filepath, update_existing=True):
                 "website_code": website_code,
                 "brand": str(rec.get("brand") or "").strip(),
                 "purchase_price": purchase_price,
-                "sale_price": sale_price,
                 "available": available,
                 "supplier": str(rec.get("supplier") or "").strip(),
                 "purchase_date": purchase_date,

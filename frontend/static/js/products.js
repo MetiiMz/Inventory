@@ -83,8 +83,6 @@ function render() {
       <td><span class="code-pill" title="کد دفتر فروشگاه" style="background:var(--accent-soft);color:var(--accent)">${esc(p.office_code)}</span></td>
       <td>${p.brand ? `<span class="badge gray plain">${esc(p.brand)}</span>` : '<span class="muted">—</span>'}</td>
       <td class="num">${p.purchase_price ? p.purchase_price_display : '<span class="muted">—</span>'}</td>
-      <td class="num">${p.sale_price_display}</td>
-      <td class="num" style="color:${p.profit_per_unit >= 0 ? "var(--green)" : "var(--red)"}">${p.profit_per_unit_display}</td>
       <td>${p.is_available
         ? '<span class="badge green">موجود</span>'
         : '<span class="badge red">ناموجود</span>'}</td>
@@ -183,10 +181,10 @@ $("#btn-export-selected").addEventListener("click", () => {
 
 function downloadCsv(list, name) {
   const headers = ["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه", "برند",
-    "قیمت خرید", "قیمت فروش", "وضعیت", "تأمین‌کننده", "تاریخ خرید", "یادداشت"];
+    "قیمت خرید", "وضعیت", "تأمین‌کننده", "تاریخ خرید", "یادداشت"];
   const rows = list.map((p) => [
     p.name, p.reference || "", p.website_code, p.office_code, p.brand || "",
-    p.purchase_price || 0, p.sale_price || 0, p.is_available ? "موجود" : "ناموجود",
+    p.purchase_price || 0, p.is_available ? "موجود" : "ناموجود",
     p.supplier || "", jFromIso(p.purchase_date), p.notes || "",
   ]);
   const csv = [headers, ...rows].map((r) =>
@@ -207,7 +205,7 @@ function formToPayload(form) {
   const fd = new FormData(form);
   const o = {};
   for (const [k, v] of fd.entries()) o[k] = v;
-  ["purchase_price", "sale_price", "paid_cash", "paid_pos", "paid_card2card", "discount_price"].forEach((k) => {
+  ["purchase_price"].forEach((k) => {
     o[k] = toEnDigits(o[k] || "0").replace(/[^\d-]/g, "") || "0";
   });
   return o;
@@ -230,34 +228,14 @@ function openProductModal(p = null) {
   form.querySelector('[name="website_code"]').value = p?.website_code || "";
   form.querySelector('[name="office_code"]').value = p?.office_code || "";
   form.querySelector('[name="purchase_price"]').value = p?.purchase_price ? moneyIn(p.purchase_price) : "";
-  form.querySelector('[name="sale_price"]').value = p?.sale_price ? moneyIn(p.sale_price) : "";
   form.querySelector('[name="supplier"]').value = p?.supplier || "";
   form.querySelector('[name="purchase_date"]').value = p?.purchase_date
     ? jFromIso(p.purchase_date) : "";
   form.querySelector('[name="notes"]').value = p?.notes || "";
 
   document.dispatchEvent(new CustomEvent("modal:opened", { detail: { root: $("#modal-product") } }));
-  updateProfitPreview();
   openModal("modal-product");
 }
-
-function updateProfitPreview() {
-  const form = $("#product-form");
-  const buy = +toEnDigits(form.querySelector('[name="purchase_price"]').value).replace(/[^\d]/g, "") || 0;
-  const sell = +toEnDigits(form.querySelector('[name="sale_price"]').value).replace(/[^\d]/g, "") || 0;
-  const badge = $("#profit-badge");
-  if (!buy && !sell) {
-    badge.textContent = "با وارد کردن قیمت‌ها، سود اینجا نمایش داده می‌شود";
-    badge.className = "badge gray plain";
-    return;
-  }
-  const unit = sell - buy;
-  const color = unit >= 0 ? "green" : "red";
-  badge.className = `badge ${color} plain`;
-  badge.textContent = `سود این ساعت: ${faMoney(unit)} تومان`;
-}
-
-$("#product-form").addEventListener("moneychange", updateProfitPreview);
 
 $("#btn-save-product").addEventListener("click", async () => {
   const form = $("#product-form");
@@ -546,7 +524,7 @@ $("#btn-run-import").addEventListener("click", async () => {
 /* ------------------------------------------------ شروع */
 
 document.addEventListener("DOMContentLoaded", () => {
-  $$("#product-form [name='purchase_price'], #product-form [name='sale_price'], "
+  $$("#product-form [name='purchase_price'], "
     + "#sale-form [name='sale_price'], "
     + "#sale-form [name='paid_cash'], #sale-form [name='paid_pos'], "
     + "#sale-form [name='paid_card2card']")

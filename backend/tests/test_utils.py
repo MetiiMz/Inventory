@@ -63,21 +63,23 @@ class ProductDictTests(TestCase):
     """product_dict — every display key the frontend consumes."""
 
     def test_all_keys_present(self):
-        p = make_product(purchase_price=1000.0, sale_price=1500.0, available=True)
+        p = make_product(purchase_price=1000.0, available=True)
         d = utils.product_dict(p)
         for key in ("id", "name", "office_code", "website_code", "brand",
-                    "purchase_price", "sale_price", "available", "is_available",
+                    "purchase_price", "available", "is_available",
                     "purchase_date", "purchase_date_fa",
                     "purchase_date_weekday", "purchase_price_display",
-                    "sale_price_display", "profit_per_unit",
-                    "profit_per_unit_display", "total_value",
-                    "total_value_display", "total_sale_value",
-                    "total_sale_value_display", "availability_fa",
+                    "total_value", "total_value_display", "availability_fa",
                     "created_at", "updated_at", "notes", "image"):
             self.assertIn(key, d)
+        # Spec-002: no product-level sale price or per-unit profit at all
+        for gone in ("sale_price", "sale_price_display", "profit_per_unit",
+                     "profit_per_unit_display", "total_sale_value",
+                     "total_sale_value_display"):
+            self.assertNotIn(gone, d)
         self.assertEqual(d["available"], 1)
         self.assertIs(d["is_available"], True)
-        self.assertEqual(d["profit_per_unit"], 500)
+        self.assertEqual(d["total_value"], 1000)
         self.assertEqual(d["availability_fa"], "موجود")
         self.assertEqual(d["purchase_date_fa"], utils.fa_date(today_iso()))
 
