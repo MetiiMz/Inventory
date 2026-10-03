@@ -3,6 +3,27 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 4: split compat.py into the 11-module compat/ package
+```bash
+# T039 prep: back up before deleting (no stale compat/ dir this time)
+cp inventory/api/compat.py /tmp/compat_before.py
+# split: generator maps each top-level fn BY NAME (common/settings/backups_export span 2 ranges),
+#   extracts VERBATIM incl. decorators via segment() (NOT ast.get_source_segment, which drops them),
+#   computes per-module imports, writes 11 modules + re-exporting __init__.py (43 names + __all__)
+python3 /tmp/split_compat.py
+python3 /tmp/verify_compat.py           # 43/43 byte-identical (decorator-aware); no undefined; no unused imports
+git rm inventory/api/compat.py          # T044
+export DJANGO_SETTINGS_MODULE=tikotime.settings
+.venv/bin/python -c "import django; django.setup(); from inventory.api import compat; print(compat.__file__, compat._guard.__module__)"
+.venv/bin/python manage.py check        # no issues
+find inventory/api/compat -name '*.py' -exec wc -l {} + | sort -n | tail -1   # backups_export.py 162 (<=400)
+grep -rn 'api_brands_add\|_page_ctx' inventory tests tikotime   # (none) 0
+git add -A && git --no-pager diff --cached --name-status         # D compat.py + A 11 modules; zero caller changes
+.venv/bin/python manage.py test 2>&1 | tail -4                   # Found 153 test(s) + OK
+# 8-page gate: runserver 8116, curl each route -> dashboard/products/calendar/repairs/sold/tracking/payments/settings = 200 (index = 302)
+git commit -m 'refactor(api): split compat.py into the 11-module domain adapter package'   # 97bad70
+```
+
 ## 2026-10-03 — Step 3: split services.py into the 11-module services/ package
 ```bash
 # T029: clear stale dir + back up before deleting

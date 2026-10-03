@@ -2,6 +2,13 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 4: compat.py split into the 11-module adapter package (`97bad70`)
+
+- **Split:** `inventory/api/compat.py` (561 lines) → `inventory/api/compat/` package with 11 modules — `common` (`_body`/`_ok`/`_fail`/`_guard`/`_attachment`), `products`, `sales`, `payments`, `repairs`, `tracking`, `calendar`, `reports`, `settings` (brands + settings/icon), `uploads` (upload + serve_image), `backups_export` (Excel import/export + db backups + database clear). Mapped **by function name** (common/settings/backups_export each span two source ranges). `git rm` the old file. Largest module = `backups_export.py` (162 lines) ≤ 400.
+- **Re-export root:** `compat/__init__.py` re-exports all **43** frozen adapter names (38 `api_*`/`export_file`/`serve_image` + 5 helpers) with `__all__` + layout docstring; `urls.py`'s `compat.<name>` calls are unchanged.
+- **⚠ Real bug caught by the diff gate:** `ast.get_source_segment()` in this Python **does not include decorator lines** for decorated functions, so the first pass silently dropped every `@csrf_exempt`/`@require_POST`/`@require_GET` — and the byte-identity check *falsely* passed because both sides used the same truncating extraction. Switched both scripts to a decorator-aware `segment()` (starts at the first decorator); after the fix the check became meaningful: **43/43 byte-identical incl. decorators**, no undefined names, no unused imports. `services.py` had no decorators, so Step 3 was unaffected.
+- **Gate green:** import under `django.setup()` → `compat.__file__` = `__init__.py`, `api_products`→`compat.products`, `export_file`→`compat.backups_export`, `_guard`→`compat.common`; `grep api_brands_add|_page_ctx` → 0; `check` clean; `git diff` = only the 11 new modules + deleted `compat.py` (zero `urls.py`/test/template/static changes, SC-007); 8 HTML pages → 200 (index 302); `Found 153 test(s)` + `OK`.
+
 ## 2026-10-03 — Step 3: services.py split into the 11-module domain package (`059c3a9`)
 
 - **Split:** `inventory/api/services.py` (1198 lines) → `inventory/api/services/` package with 11 modules — `common` (`ApiError` + `_clean_ids`/`_merge_partial`/`_parse_iso_or_raise`), `products`, `sales`, `payments`, `repairs`, `tracking`, `settings`, `uploads`, `calendar`, `reports`, `export_import`; then `git rm` the old single file. Largest module = `sales.py` (277 lines) ≤ 400.
