@@ -3,6 +3,16 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 0: freeze the legacy `/api/*` contract (reference test module)
+```bash
+grep -c 'def test_' tests/test_legacy_api_baseline.py   # N = 22 (fix this number for all later gates)
+.venv/bin/python manage.py test 2>&1 | tail -4         # Found 169 test(s) + OK   (= 147 baseline + N=22)
+git add tests/test_legacy_api_baseline.py
+git commit -m 'test(api): freeze the legacy /api/* contract before the restructure'   # 443bff6
+git --no-pager show --stat HEAD      # exactly 1 file: tests/test_legacy_api_baseline.py (563 insertions)
+# N is FIXED at 22 for every later gate: pre-step-1 base = 147 -> expect >=147+22; post-step-1 base = 131 -> expect >=131+22
+```
+
 ## 2026-10-01 — Refactor preflight: baseline numbers + rescue net (16:47–16:49)
 ```bash
 git --no-pager status --short                       # empty (clean tree)

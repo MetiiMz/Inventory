@@ -2,6 +2,14 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 0: legacy `/api/*` contract frozen (`443bff6`)
+
+- **Reference test module added:** `tests/test_legacy_api_baseline.py` (563 lines, **22 tests**) — the one new test file of the whole refactor. Locks the legacy HTTP contract (`/api/*`, `/export/*`, `/data/images/*` + unknown-path behaviour) on **unmodified code**, using named key/value assertions (key order inside an object is free; list order significant).
+- **Isolation held:** uploads under `override_settings(IMG_DIR=tmp)`, exports under `DATA_DIR=tmp`, backups under `BACKUP_DIR=tmp` **plus** `mock.patch.object(dbhelpers, "BACKUP_DIR", tmp)` (module-level constants aren't affected by `override_settings`); destructive `clear`/`restore` only through the not-found/stubbed branches → nothing writes to the real `data/`.
+- **Step-0 gate green:** `manage.py test` → `Found 169 test(s)` + `OK` (= 147 baseline + **N=22**). `N` is now fixed at **22** for every later gate (pre-step-1 base 147 → ≥169; post-step-1 base 131 → ≥153).
+- **SC-011 verified:** this is the first structural commit and it contains exactly one file — `git show --stat 443bff6` = `tests/test_legacy_api_baseline.py` (563 insertions). T004–T010 marked done; docs bookkeeping is committed separately to keep `git log` readable.
+
+
 ## 2026-10-01 — Layout-refactor preflight + test-isolation leak found
 
 - Baseline recorded before any structural change: `147 tests OK`, `manage.py check` clean, images **139**, backups 42, exports 54, db `sha256=f753fc1cc299f31762d4c9a2b8751af27c0300dfb933abcda7a008b8cf69444f`. Rescue net verified at `/tmp/tiko-preflight` (full `data` copy + `code.tgz`; DB hash identical to the repo).
