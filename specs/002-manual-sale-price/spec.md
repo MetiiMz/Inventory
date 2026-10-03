@@ -68,18 +68,19 @@ As the shop owner, the two top dashboard boxes tell me real business numbers: "t
 
 ---
 
-### User Story 4 - Brand table shows what each brand actually earned (Priority: P2)
+### User Story 4 - Brand table keeps its inventory view AND adds real sales (Priority: P2)
 
-As the shop owner, the per-brand table's "total sale value" and profit columns are computed from sales that actually happened for that brand, not from pre-set prices of unsold stock. The columns showing unsold stock count and stock cost value stay exactly as before.
+As the shop owner, the per-brand table keeps its two original inventory columns — unsold stock count and unsold stock cost value (computed from in-stock products only) — and gains four new columns computed from sales that actually happened for that brand: sold count, sold purchase value, total sold value, and sold profit. A brand with no sales shows blank (not zero) in all four sold columns.
 
-**Why this priority**: Directly dependent on the same data-shape change; the brand table is the owner's per-supplier performance view and would otherwise keep projecting phantom numbers from removed data.
+**Why this priority**: Directly dependent on the same data-shape change; the old projected "sale value / potential profit" columns on in-stock products relied on the removed pre-set product sale price, so per-brand sold figures must come from actual Sale rows instead — while the inventory columns are kept as they were.
 
-**Independent Test**: Seed two brands: one with several sold products and unsold remainder, one with zero sales but stock; verify per-brand sale value and profit equal hand-computed sums over that brand's Sale rows only, while stock count/value columns are unchanged.
+**Independent Test**: Seed two brands: one with sold products plus an unsold remainder, one with stock but zero sales; verify the in-stock count/value columns equal hand counts/sums over that brand's in-stock products only, and the four sold columns (count, purchase value, sale value, profit) equal hand-computed counts/sums over that brand's Sale rows (blank for the zero-sales brand).
 
 **Acceptance Scenarios**:
 
-1. **Given** brand A with sold and unsold products, **When** the owner views the brand table, **Then** brand A's "total sale value" = sum of sale prices of its sold products and its profit = sum of (sale price − cost) for those same sales.
-2. **Given** brand B with stock but no sales, **When** the owner views the brand table, **Then** brand B's sale value and profit are 0 while its stock count and stock cost value are still correct.
+1. **Given** brand A with sold and unsold products, **When** the owner views the brand table, **Then** brand A's in-stock count/value match its in-stock products and its sold columns equal, respectively: the count of its sales, the sum of the recorded purchase prices of those sales, the sum of their sale prices, and the sum of their recorded profits.
+2. **Given** brand B with stock but no sales, **When** the owner views the brand table, **Then** all four of brand B's sold columns are blank while its in-stock count and in-stock cost value are still correct.
+3. **Given** a brand whose products were all sold (no remaining stock), **When** the owner views the brand table, **Then** that brand still appears with zero in-stock count/value and its real sold numbers.
 
 ---
 
@@ -120,7 +121,7 @@ As a clerk or owner, everywhere a sale is shown — the Sold list, the calendar,
 - **Editing a deposit sale**: when a "بیعانه" (deposit) sale is edited with a new price, validation and profit recompute against the new price; previously recorded receipts keep their stored amounts (no automatic rewrite of past receipts — payment-receipt logic is out of scope).
 - **Historical discounted sales**: old sales stored with a discounted final price lower than their listed price keep their stored sale price, profit and payments; after the redundant final-price column is dropped, their displayed/summed price is the stored sale price. Historical profit values are NOT retroactively recomputed — the recorded profit stays as-is.
 - **Product without a cost price**: sale profit is computed against a zero cost (existing behavior: profit = full price).
-- **Zero-sales brand/product**: all "sold" aggregates must read as zero without errors or empty-table crashes.
+- **Zero-sales brand/product**: a brand with no sales must not crash any aggregate; in the brand table its four sold columns are null together (rendered blank, not zero) while its in-stock count/value stay correct, and a brand whose products are all sold still appears with zero stock.
 - **Migration on the live local database**: both column removals must apply cleanly on the existing `db/db.sqlite3`; every remaining field (product cost price; sale price, profit, payments, dates, customer data) must be preserved exactly; the app must start and all pages render after migration.
 - **No remaining readers of the removed price field**: before the column is dropped, every code path that read the "final/discounted" price must be switched to the entered price so nothing references a missing field.
 
@@ -138,7 +139,7 @@ As a clerk or owner, everywhere a sale is shown — the Sold list, the calendar,
 - **FR-007**: The sale record's redundant discounted-final-price field MUST be removed from storage via a data migration; all historical sale data that remains (sale price, profit, payments, dates, customer, sale type) MUST be preserved.
 - **FR-008**: The dashboard "total sale value" (ارزش فروش) MUST equal the sum of sale prices of sales that actually happened, not a projection over unsold products.
 - **FR-009**: The dashboard profit box MUST equal the sum of profit of sales dated within the current Jalali year.
-- **FR-010**: The brand table's "total sale value" (جمع ارزش فروش) MUST equal the sum of sale prices of that brand's actual sales; its profit column MUST equal the sum of (sale price − cost) over the same sales. The existing stock-count and stock-cost-value columns MUST keep their current meaning (unsold inventory).
+- **FR-010**: The brand table MUST show, per brand: the count and purchase-cost value of that brand's in-stock products (available=True, meaning unchanged from before this feature) AND, from that brand's actual Sale rows, the count of those sales, the sum of their recorded purchase prices, the sum of their sale prices, and the sum of their recorded profits. All four sold columns MUST be null — rendered blank, not zero — for a brand that has no sales, and a brand with sales but zero remaining stock MUST still appear with its real sold numbers.
 - **FR-011**: The 12-month activity chart MUST add two series: per-month count of in-person sales and per-month count of online sales; existing series MUST remain unchanged.
 - **FR-012**: The Sold list page MUST remove the "final price" (قیمت نهایی) sort option and every discount/final-price column, input or detail text; it MUST display only the entered sale price.
 - **FR-013**: The calendar MUST display the entered sale price for sale events (no fallback to a removed field); the payment breakdown section MUST stay unchanged.
@@ -151,7 +152,7 @@ As a clerk or owner, everywhere a sale is shown — the Sold list, the calendar,
 - **Product**: a watch in stock — cost (purchase) price, purchase date, stock availability, brand, codes, image. After this feature: no sale-price attribute.
 - **Sale**: one sold product — entered sale price (required, manual), profit, sale date, sale type (in-person / online), payment type (cash / deposit), paid amounts (cash, POS, card-to-card), customer. After this feature: no separate discounted final-price attribute.
 - **Payment (receipt)**: an amount paid against a sale — total amount, paid amount, date. Unchanged by this feature.
-- **Brand**: a grouping label on products, with aggregates: unsold stock count, unsold stock cost value, sold sale-value, sold profit (new meaning after this feature).
+- **Brand**: a grouping label on products, with per-brand aggregates: in-stock count, in-stock purchase-cost value (from in-stock products), and — new after this feature — sold count, sold purchase value, total sold value, and sold profit (all from actual Sale rows; null together when the brand has no sales).
 - **Jalali calendar month**: the time bucket for the activity chart and for "current year" aggregation.
 
 ## Success Criteria *(mandatory)*
@@ -160,7 +161,7 @@ As a clerk or owner, everywhere a sale is shown — the Sold list, the calendar,
 
 - **SC-001**: 100% of newly recorded sales carry a manually entered price; 0 sales can be created without one (verified by an automated attempt that is rejected).
 - **SC-002**: The two top dashboard boxes match hand-computed sums over actual Sale records exactly (0 divergence) on a fixture containing unsold stock and multi-year sales.
-- **SC-003**: Every brand-table row's sale-value and profit match hand-computed per-brand sums over that brand's Sale rows exactly; stock columns match pre-feature values on the same fixture.
+- **SC-003**: Every brand-table row's in-stock count/value match hand-computed sums over that brand's in-stock products and its sold count/purchase-value/sale-value/profit match hand-computed counts/sums over that brand's Sale rows exactly (0 divergence); brands with no sales show all four sold columns blank on the same fixture.
 - **SC-004**: The two new chart series match hand-counted in-person/online sales per month exactly, with all pre-existing series unchanged.
 - **SC-005**: The migration applies to the real local database with 0 data loss on all retained fields (product cost prices; sale prices, profits, payments, dates, customers), verified by before/after row inspection.
 - **SC-006**: 0 discount/final-price remnants remain in the sale-flow UI (forms, sort options, detail panels, list columns) and 0 code references to the removed price field remain in the application.
@@ -170,7 +171,7 @@ As a clerk or owner, everywhere a sale is shown — the Sold list, the calendar,
 
 - **Historical data semantics**: old sales that had a discounted final price will display and aggregate at their stored sale price after the redundant column is dropped; their stored profit values are preserved as recorded (no retroactive recomputation). This matches the explicit instruction to drop the column rather than back-fill.
 - **Receipt history is untouched**: payment receipts created under the old final-price are not rewritten; only the validation target for new/edited amounts changes to the entered sale price.
-- **Labels**: the dashboard/brand-table labels ("ارزش فروش", "سود بالقوه") may be kept or cosmetically renamed (e.g., "سود فروش‌رفته") to reflect the new meaning; either way the displayed values come from actual Sale records.
+- **Labels**: the dashboard brand-table section is titled "موجودی بر اساس برند" with seven columns in this order: برند | تعداد موجودی | تعداد فروش‌رفته | قیمت خرید (موجود) | قیمت خرید (فروش‌رفته‌ها) | جمع قیمت فروش (فروش‌رفته‌ها) | جمع سود (فروش‌رفته‌ها); the four sold columns render "—" (blank) together when a brand has no sales, and the sold-profit cell keeps its green/amber sign coloring only when present.
 - **Current-year window**: "current Jalali year" uses the same Jalali calendar math the app already uses for the activity chart — the year in which today falls.
 - **Local single-user app**: per the constitution, everything stays local; no authentication, no multi-device concerns; the migration runs once on the local database.
 - **Small reversible commits**: per the constitution, the schema change (migrations), the sale-flow logic change, the reporting changes, and the template changes land as small, individually revertible commits.

@@ -30,8 +30,7 @@ Routes and URL paths are **unchanged** (the Spec-001 route contract stands). Pay
 - `revenue` now Σ `sale_price` (was `final_price`); `profit`, `count`, `purchase_value`, `jy/jm/label/future` unchanged
 
 ### Brand breakdown row (`get_brand_breakdown`)
-- `sale_value`, `profit`: now computed from that brand's actual sales (research D3)
-- `count`, `value` unchanged (unsold stock)
+- Final shape (correction + addition, post-implementation): 7 fields in row order — `brand`, `in_stock_count`, `in_stock_value` (from `Product` with `available=True`; always real numbers), then `sold_count` (Count of the brand's Sale rows), `sold_purchase_value` (Σ `Sale.purchase_price`), `sold_value` (Σ `Sale.sale_price`), `sold_profit` (Σ `Sale.profit`) — all four sold-* fields null **together** when the brand has no sales (rendered blank, not zero); a brand with sales but no remaining stock still appears with zero stock (research D3)
 
 ## Request payloads
 - **Create sale**: `sale_price` required (> 0) or 400; `discount_price` no longer accepted as meaningful — ignored like any unknown key (FR-004).
@@ -49,7 +48,7 @@ Routes and URL paths are **unchanged** (the Spec-001 route contract stands). Pay
 - **Product add/edit form**: the sale-price input is removed; cost price remains.
 - **Sale detail panel (sold.js)**: single price rows — `قیمت فروش` and `قیمت پرداخت‌شده توسط خریدار`; the `قیمت نهایی (با تخفیف)` and `میزان تخفیف` rows are gone.
 - **Calendar (calendar.js)**: sale price shown via the entered price only; paid-cash/POS/card breakdown rows unchanged.
-- **Dashboard**: two stat-box label/sub-text renames and two brand-table label changes (research D5/D6); chart gains two series + legend + tooltip rows (research D7).
+- **Dashboard**: two stat-box label/sub-text renames and the brand table re-labeled to seven columns under "موجودی بر اساس برند" (research D5/D6); chart gains two series + legend + tooltip rows (research D7).
 
 ## Import / export
 - Product CSV/Excel: `قیمت فروش` column removed from both export and import; a legacy file that still contains the column imports fine (column ignored).

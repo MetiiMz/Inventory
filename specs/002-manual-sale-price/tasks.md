@@ -101,23 +101,23 @@
 
 ---
 
-## Phase 6: User Story 4 - Brand table shows what each brand actually earned (Priority: P2)
+## Phase 6: User Story 4 - Brand table keeps inventory AND shows what each brand actually earned (Priority: P2)
 
-**Goal**: The per-brand table's sale-value/profit columns come from that brand's actual `Sale` rows; stock columns unchanged (FR-010, research D3/D4).
+**Goal**: The per-brand table keeps its original in-stock count/value columns and adds sold columns from that brand's actual `Sale` rows (FR-010, research D3/D4). **Correction (post-implementation)**: the first pass *replaced* the stock columns with Sale-only aggregates; the corrected behavior is the union — `in_stock_count`/`in_stock_value` over `Product` (available=True) plus the sold fields over that brand's `Sale` rows; a sold-out brand still appears with zero stock. **Addition (post-correction)**: two more sold fields — `sold_count` (count of the brand's Sale rows) and `sold_purchase_value` (Σ `Sale.purchase_price` over them) — with the same null-when-no-sales rule; final table is 7 columns: brand | in-stock count | sold count | in-stock purchase value | sold purchase value | sold value | sold profit.
 
-**Independent Test**: Brand A with sold + unsold products → sale value/profit equal hand-computed sums over A's Sale rows; brand B with stock but zero sales → 0/0 with correct stock count/value.
+**Independent Test**: Brand A with sold + unsold products → in-stock count/value from its in-stock products, sold count/purchase-value/value/profit equal hand-computed counts/sums over A's Sale rows; brand B with stock but zero sales → all four sold fields are None with correct stock count/value; a brand with sales but no remaining stock → zero stock, real sold numbers.
 
 ### Tests for User Story 4 (write FIRST — they must fail)
 
-- [X] T029 [US4] Update `backend/tests/test_dbhelpers_reports.py` (brand section): brand with sold + unsold → `sale_value` = Σ sale prices of its sales and `profit` = Σ(price − cost) over the same sales; zero-sales brand → `sale_value`/`profit` = 0 with stock count/value unchanged.
+- [X] T029 [US4] Update `backend/tests/test_dbhelpers_reports.py` (brand section): `test_brand_breakdown_stock_and_sales_combined` asserts the 7-key row shape, stock columns from in-stock products, and the four sold columns (count, purchase value, sale value, profit) from Sale rows; `test_brand_breakdown_in_stock_only` asserts a zero-sales brand keeps real stock count/value with all four sold-* fields None.
 
 ### Implementation for User Story 4
 
-- [X] T030 [US4] `backend/inventory/reports.py` — `get_brand_breakdown` (~115): replace the product aggregates (~128/130) — `sale_value` = Σ `Sale.sale_price` and `profit` = Σ(`Sale.sale_price` − `Sale.purchase_price`) over sales whose product belongs to that brand; the `count`/`value` (unsold stock) columns keep their current queries.
-- [X] T031 [US4] `frontend/templates/dashboard.html` (brand section): section title `انبار بر اساس برند` → `انبار و فروش بر اساس برند`; column `سود بالقوه` → `سود فروش`; `جمع ارزش فروش` text stays (now accurate).
-- [X] T032 [US4] Gate: suite green; commit `feat(reports): brand table from actual sales (US4)`.
+- [X] T030 [US4] `backend/inventory/reports.py` — `get_brand_breakdown`: two aggregations merged per brand — `in_stock_count`/`in_stock_value` over `Product.objects.filter(available=True)` and `sold_count`=Count, `sold_purchase_value`=Σ `Sale.purchase_price`, `sold_value`=Σ `Sale.sale_price`, `sold_profit`=Σ `Sale.profit` via `product__brand`; all four sold fields default to None and are filled only for brands with sales; rows sorted by in-stock value desc.
+- [X] T031 [US4] `frontend/templates/dashboard.html` (brand section): section title `موجودی بر اساس برند`; seven columns برند | تعداد موجودی | تعداد فروش‌رفته | قیمت خرید (موجود) | قیمت خرید (فروش‌رفته‌ها) | جمع قیمت فروش (فروش‌رفته‌ها) | جمع سود (فروش‌رفته‌ها); the four sold cells render `—` together when None; profit keeps green/amber sign coloring only when present; empty-state text now inventory-based.
+- [X] T032 [US4] Gate: suite green; commit `feat(reports): brand table keeps stock columns + real sales (US4, corrected)`.
 
-**Checkpoint**: Per-supplier performance view is truthful.
+**Checkpoint**: Per-supplier view shows both stock and real earnings.
 
 ---
 
@@ -234,7 +234,7 @@ T007 → T008 → T009 → T010 → T011 → T012 → T013 → T014 → T015 (ga
 1. US1 → demo (MVP)
 2. + US2 → products side complete; no pre-set price anywhere
 3. + US3 → real dashboard boxes
-4. + US4 → real per-brand numbers
+4. + US4 → brand table: stock columns kept + real per-brand sales
 5. + US5 → channel-volume chart series
 6. + US6 → zero discount remnants (grep gate)
 7. Phase 9 → schema drop + final green suite; each phase is its own revertible commit (constitution rule 7)

@@ -168,6 +168,7 @@ function showEventDetail(kind, id) {
     add("برند", esc(d.brand));
     add("رفرنس", esc(d.reference));
     add("قیمت فروش", d.sale_price_display + " تومان");
+    add("قیمت خرید", d.purchase_price_display ? d.purchase_price_display + " تومان" : "");
     add("سود این فروش", `<span style="color:var(--green)">${d.profit_display} تومان</span>`);
     add("خریدار", esc(d.customer));
     add("شماره تماس خریدار", d.customer_phone_fa || "");

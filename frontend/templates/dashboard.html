@@ -104,7 +104,7 @@
 <div class="mt-14">
   <section class="glass card">
     <div class="card-title">
-      <h3>فروش بر اساس برند</h3>
+      <h3>موجودی بر اساس برند</h3>
       <span class="badge blue plain">{{ fa_num(brands | length) }} برند</span>
     </div>
     {% if brands %}
@@ -112,19 +112,39 @@
       <table class="data compact">
         <thead><tr>
           <th>برند</th>
-          <th>تعداد فروش</th>
-          <th>جمع ارزش فروش</th>
-          <th>جمع سود</th>
-          <th>جمع ارزش خرید</th>
+          <th>تعداد موجودی</th>
+          <th>تعداد فروش‌رفته</th>
+          <th>قیمت خرید (موجود)</th>
+          <th>قیمت خرید (فروش‌رفته‌ها)</th>
+          <th>جمع قیمت فروش (فروش‌رفته‌ها)</th>
+          <th>جمع سود (فروش‌رفته‌ها)</th>
         </tr></thead>
         <tbody>
           {% for b in brands %}
           <tr>
             <td><div class="p-name">{{ b.brand or "بدون برند" }}</div></td>
-            <td class="num">{{ fa_num(b.units) }} <small class="muted">فقره</small></td>
-            <td class="num">{{ fa_money(b.revenue) }}</td>
-            <td class="num" style="color: var({% if b.profit >= 0 %}--green{% else %}--amber{% endif %})">{{ fa_money(b.profit) }}</td>
-            <td class="num muted">{{ fa_money(b.value) }}</td>
+            <td class="num">{{ fa_num(b.in_stock_count) }} <small class="muted">فقره</small></td>
+            {% if b.sold_count is not none %}
+            <td class="num">{{ fa_num(b.sold_count) }} <small class="muted">فقره</small></td>
+            {% else %}
+            <td class="num muted">—</td>
+            {% endif %}
+            <td class="num muted">{{ fa_money(b.in_stock_value) }}</td>
+            {% if b.sold_purchase_value is not none %}
+            <td class="num">{{ fa_money(b.sold_purchase_value) }}</td>
+            {% else %}
+            <td class="num muted">—</td>
+            {% endif %}
+            {% if b.sold_value is not none %}
+            <td class="num">{{ fa_money(b.sold_value) }}</td>
+            {% else %}
+            <td class="num muted">—</td>
+            {% endif %}
+            {% if b.sold_profit is not none %}
+            <td class="num" style="color: var({% if b.sold_profit >= 0 %}--green{% else %}--amber{% endif %})">{{ fa_money(b.sold_profit) }}</td>
+            {% else %}
+            <td class="num muted">—</td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody>
@@ -133,8 +153,8 @@
     {% else %}
     <div class="empty">
       <div class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/></svg></div>
-      <h4>هنوز فروشی ثبت نشده</h4>
-      <p>با اولین فروش، جدول برندها اینجا شکل می‌گیرد</p>
+      <h4>هنوز ساعتی ثبت نشده</h4>
+      <p>با اولین ساعت انبار، جدول برندها اینجا شکل می‌گیرد</p>
       <a class="btn btn-primary btn-sm" href="/products">افزودن ساعت</a>
     </div>
     {% endif %}

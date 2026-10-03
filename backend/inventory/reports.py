@@ -123,24 +123,58 @@ def get_monthly_activity(jy=None):
 
 
 def get_brand_breakdown():
-    """فروش‌های ثبت‌شده به تفکیک برند (شامل ساعت‌های فروخته‌شده).
+    """موجودی انبار و فروش‌های ثبت‌شده به تفکیک برند.
 
-    برای هر برند: تعداد فروش، جمع ارزش فروش (قیمت‌های ثبت‌شده در
-    زمان فروش)، جمع سود و جمع ارزش خرید.
+    دو دسته‌ی جدا:
+    - موجودی انبار (Product با available=True): تعداد و جمع قیمت خرید —
+      هر برندی که ساعت موجود داشته حتماً در خروجی حضور دارد.
+    - فروش‌ها (Sale به تفکیک برندِ محصول): تعداد فروش‌رفته، جمع قیمت
+      خریدِ همان فروش‌ها، جمع قیمت فروش و جمع سود.
+      برندی که هیچ فروشی نداشته، هر چهار فیلد
+      sold_count/sold_purchase_value/sold_value/sold_profit با هم
+      None می‌شوند (در رابط کاربری خالی/— نمایش داده می‌شوند، نه صفر).
+    برندی که فروشی داشته ولی دیگر موجودی نداشته هم نمایش داده
+    می‌شود (موجودی صفر + اعداد واقعی فروش).
     """
-    rows = (
-        Sale.objects.select_related("product")
-        .values("product__brand")
+    stock = {}
+    for r in (
+        Product.objects.filter(available=True)
+        .values("brand")
         .annotate(
-            units=Count("id"),
-            revenue=Coalesce(Sum("sale_price"), Value(0.0), output_field=FloatField()),
-            profit=Coalesce(Sum("profit"), Value(0.0), output_field=FloatField()),
-            value=Coalesce(Sum("purchase_price"), Value(0.0), output_field=FloatField()),
+            in_stock_count=Count("id"),
+            in_stock_value=Coalesce(Sum("purchase_price"), Value(0.0), output_field=FloatField()),
         )
-        .order_by("-revenue")
-    )
-    return [
-        {"brand": r["product__brand"] or "", "units": r["units"],
-         "revenue": r["revenue"], "profit": r["profit"], "value": r["value"]}
-        for r in rows
+    ):
+        stock[r["brand"] or ""] = r
+
+    sold = {}
+    for r in Sale.objects.values("product__brand").annotate(
+        sold_count=Count("id"),
+        sold_purchase_value=Sum("purchase_price"),
+        sold_value=Sum("sale_price"),
+        sold_profit=Sum("profit"),
+    ):
+        sold[r["product__brand"] or ""] = r
+
+    out = [
+        {"brand": brand, "in_stock_count": r["in_stock_count"], "sold_count": None,
+         "in_stock_value": r["in_stock_value"], "sold_purchase_value": None,
+         "sold_value": None, "sold_profit": None}
+        for brand, r in stock.items()
     ]
+    by_brand = {row["brand"]: row for row in out}
+    for brand, r in sold.items():
+        row = by_brand.get(brand)
+        if row is None:
+            row = {"brand": brand, "in_stock_count": 0, "sold_count": None,
+                   "in_stock_value": 0, "sold_purchase_value": None,
+                   "sold_value": None, "sold_profit": None}
+            by_brand[brand] = row
+            out.append(row)
+        row["sold_count"] = r["sold_count"]
+        row["sold_purchase_value"] = r["sold_purchase_value"]
+        row["sold_value"] = r["sold_value"]
+        row["sold_profit"] = r["sold_profit"]
+    out.sort(key=lambda row: (-row["in_stock_value"], row["brand"] or ""))
+    return out
+

@@ -130,6 +130,32 @@ def count_records():
         conn.close()
 
 
+def _remove_orphaned_images(site_icon):
+    """حذف تصاویرِ یتیم‌شده؛ فقط آیکون سایت را نگه می‌دارد.
+
+    بعد از پاک‌سازی، فایل‌های تصویری سطرهای products/repairs/tracking
+    (که حذف شدند) یتیم می‌شوند. همه‌ی فایل‌های IMG_DIR پاک می‌شوند،
+    به‌جز آیکون سایتِ فعلی. هیچ پوشش دیگری (backups/exports) لمس
+    نمی‌شود.
+    """
+    removed = 0
+    try:
+        names = os.listdir(IMG_DIR)
+    except OSError:
+        return removed
+    for fname in names:
+        if fname == site_icon:
+            continue  # آیکون سایتِ فعلی دست‌نخورده می‌ماند
+        p = os.path.join(IMG_DIR, fname)
+        if os.path.isfile(p):
+            try:
+                os.remove(p)
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 def clear_database():
     """پاک‌سازی کامل داده‌های دوره برای شروع سال جدید.
 
@@ -138,7 +164,9 @@ def clear_database():
     پیگیری‌ها در یک تراکنش حذف می‌شوند؛ شمارنده‌ی id ها صفر می‌شود
     (شماره‌گذاری از ۱ شروع می‌شود) و فایل VACUUM می‌شود.
     تنظیمات فروشگاه، برندها و آیکون سایت دست‌نخورده می‌مانند.
+    تصاویر یتیم‌شده‌ی دوره هم حذف می‌شوند، به‌جز آیکون سایت.
     """
+    site_icon = get_setting("site_icon", "")
     backup_db("pre_clear_" + _stamp() + ".db")
     conn = sqlite3.connect(DB_PATH, isolation_level=None)
     try:
@@ -164,6 +192,8 @@ def clear_database():
         cur.execute("VACUUM")
     finally:
         conn.close()
+    # تصاویر یتیم‌شده حذف می‌شوند؛ فقط آیکون سایت می‌ماند
+    counts["images_removed"] = _remove_orphaned_images(site_icon)
     return counts
 
 

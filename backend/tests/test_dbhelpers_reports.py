@@ -143,6 +143,46 @@ class ClearDatabaseTests(TestCase):
             self.assertEqual(new_id, 1)  # id restarted at 1
             self.assertEqual(kept, "تیک")  # settings preserved
 
+    def test_clear_removes_orphaned_images_keeps_site_icon(self):
+        """Data wipe removes orphaned images but keeps the site logo."""
+        dbhelpers.set_setting("site_icon", "logo.png")  # set via the ORM test DB
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = f"{tmp}/clear_test.db"
+            self._make_raw_db(db_path)
+            img_dir = f"{tmp}/images"
+            os.makedirs(img_dir)
+            for name in ("orphan_a.jpg", "orphan_b.png", "stale.gif",
+                        "logo.png"):
+                with open(os.path.join(img_dir, name), "w") as f:
+                    f.write("x")
+            with tempfile.TemporaryDirectory() as bdir, \
+                 mock.patch.object(dbhelpers, "BACKUP_DIR", bdir), \
+                 mock.patch.object(dbhelpers, "DB_PATH", db_path), \
+                 mock.patch.object(dbhelpers, "IMG_DIR", img_dir):
+                counts = dbhelpers.clear_database()
+            # Orphans are gone; only the site logo survives
+            self.assertEqual(counts["images_removed"], 3)
+            self.assertEqual(os.listdir(img_dir), ["logo.png"])
+
+    def test_clear_removes_all_images_when_no_site_icon(self):
+        """With no site icon set, every image file is removed."""
+        Setting.objects.filter(key="site_icon").delete()  # ensure unset
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = f"{tmp}/clear_test.db"
+            self._make_raw_db(db_path)
+            img_dir = f"{tmp}/images"
+            os.makedirs(img_dir)
+            for name in ("orphan_a.jpg", "orphan_b.png"):
+                with open(os.path.join(img_dir, name), "w") as f:
+                    f.write("x")
+            with tempfile.TemporaryDirectory() as bdir, \
+                 mock.patch.object(dbhelpers, "BACKUP_DIR", bdir), \
+                 mock.patch.object(dbhelpers, "DB_PATH", db_path), \
+                 mock.patch.object(dbhelpers, "IMG_DIR", img_dir):
+                counts = dbhelpers.clear_database()
+            self.assertEqual(counts["images_removed"], 2)
+            self.assertEqual(os.listdir(img_dir), [])
+
 
 class ReportTests(TestCase):
     """Dashboard aggregates."""
@@ -184,7 +224,7 @@ class ReportTests(TestCase):
         self.assertEqual(stats["sold_revenue"], 1000)
         self.assertEqual(stats["sold_profit"], 600)
 
-    def test_brand_breakdown_from_sales(self):
+    def test_brand_breakdown_stock_and_sales_combined(self):
         p_in = make_product(brand="Rolex", purchase_price=1000, available=True)
         p_sold_r = make_product(brand="Rolex", office_code="OF-BR",
                                 website_code="WS-BR",
@@ -203,13 +243,26 @@ class ReportTests(TestCase):
         rows = reports.get_brand_breakdown()
         by_brand = {r["brand"]: r for r in rows}
         self.assertEqual(set(by_brand), {"Rolex", "Omega"})
-        # the still-in-stock Rolex watch must not appear in the brand table
-        self.assertEqual(by_brand["Rolex"]["units"], 1)
-        self.assertEqual(by_brand["Rolex"]["revenue"], 1500)
-        self.assertEqual(by_brand["Rolex"]["profit"], 800)
-        self.assertEqual(by_brand["Rolex"]["value"], 700)
-        self.assertEqual(by_brand["Omega"]["revenue"], 2000)
-        self.assertEqual(by_brand["Omega"]["profit"], 1100)
+        self.assertEqual(
+            set(rows[0]),
+            {"brand", "in_stock_count", "sold_count", "in_stock_value",
+             "sold_purchase_value", "sold_value", "sold_profit"})
+        # in-stock Rolex watch feeds the stock columns
+        self.assertEqual(by_brand["Rolex"]["in_stock_count"], 1)
+        self.assertEqual(by_brand["Rolex"]["in_stock_value"], 1000)
+        # sold columns come from that brand's Sale rows only
+        self.assertEqual(by_brand["Rolex"]["sold_count"], 1)
+        self.assertEqual(by_brand["Rolex"]["sold_purchase_value"], 700)
+        self.assertEqual(by_brand["Rolex"]["sold_value"], 1500)
+        self.assertEqual(by_brand["Rolex"]["sold_profit"], 800)
+        # a brand with sales but no remaining stock still appears,
+        # with zero stock and its real sold numbers
+        self.assertEqual(by_brand["Omega"]["in_stock_count"], 0)
+        self.assertEqual(by_brand["Omega"]["in_stock_value"], 0)
+        self.assertEqual(by_brand["Omega"]["sold_count"], 1)
+        self.assertEqual(by_brand["Omega"]["sold_purchase_value"], 900)
+        self.assertEqual(by_brand["Omega"]["sold_value"], 2000)
+        self.assertEqual(by_brand["Omega"]["sold_profit"], 1100)
     def test_monthly_activity_twelve_months(self):
         months = reports.get_monthly_activity(1404)
         self.assertEqual(len(months), 12)
@@ -223,6 +276,20 @@ class ReportTests(TestCase):
         self.assertEqual(months[0]["revenue"], 0)
 
     def test_brand_breakdown_in_stock_only(self):
-        # (Spec-002) replaced by test_brand_breakdown_from_sales: the brand
-        # table now aggregates actual Sale rows, not in-stock projections.
-        self.assertTrue(True)
+        # (Spec-002, corrected) a brand with stock but no sales: stock
+        # columns are real, ALL four sold-* columns are None together
+        # (rendered blank, not zero).
+        make_product(brand="Omega", purchase_price=2500, available=True)
+        make_product(brand="Omega", office_code="OF-BS",
+                     website_code="WS-BS",
+                     purchase_price=500, available=False)  # unavailable, no sale
+        rows = reports.get_brand_breakdown()
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["brand"], "Omega")
+        self.assertEqual(row["in_stock_count"], 1)
+        self.assertEqual(row["in_stock_value"], 2500)
+        self.assertIsNone(row["sold_count"])
+        self.assertIsNone(row["sold_purchase_value"])
+        self.assertIsNone(row["sold_value"])
+        self.assertIsNone(row["sold_profit"])

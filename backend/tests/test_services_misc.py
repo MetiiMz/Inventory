@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from inventory.api import services
 from inventory.api.services import ApiError
 from inventory.models import Product, Repair, Sale
+from inventory.utils import fa_money
 from tests.helpers import make_product, today_iso
 
 
@@ -42,6 +43,16 @@ class CalendarServiceTests(TestCase):
         cell = next(c for c in data["cells"] if c and c["iso"] == self.mid)
         self.assertEqual(cell["purchases"][0]["id"], p.id)
         self.assertEqual(cell["purchases"][0]["type"], "purchase")
+        # a same-day sale cell carries both the sale price and the purchase
+        # price recorded at sale time (both feed the day-detail popup)
+        Sale.objects.create(
+            product=p, sale_price=150, purchase_price=100, profit=50,
+            sale_date=self.mid, customer="x", customer_phone="09123456789")
+        cell = next(c for c in services.calendar_month(self.jy, self.jm)["cells"]
+                    if c and c["iso"] == self.mid)
+        s_cell = cell["sales"][0]
+        self.assertEqual(s_cell["price_display"], fa_money(150))
+        self.assertEqual(s_cell["purchase_price_display"], fa_money(100))
 
     def test_invalid_month_falls_back_to_current(self):
         data = services.calendar_month(None, None)
