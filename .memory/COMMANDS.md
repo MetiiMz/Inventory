@@ -3,6 +3,22 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 2: drop gunicorn/whitenoise; static independent of DEBUG
+```bash
+# requirements.txt: -gunicorn -whitenoise   -> 3 lines (Django, Jinja2, openpyxl)
+# settings.py: -WhiteNoiseMiddleware, -STORAGES, -WHITENOISE_MAX_AGE, docstring prod=runserver
+# urls.py: + path("static/<path:path>", serve_static, {"insecure": True})  (staticfiles.views.serve, R3)
+# rm -rf staticfiles ; .gitignore: -staticfiles/ ; wsgi/jinja/README/INDEX doc updates
+.venv/bin/python manage.py check                                    # no issues
+grep -rn 'gunicorn\|whitenoise\|collectstatic' --include=*.py --include=*.md --include=*.txt \
+     tikotime inventory README.md .memory/INDEX.md                  # (no matches)
+DJANGO_DEBUG=0 .venv/bin/python manage.py runserver 127.0.0.1:8114 &
+#   curl /static/css/app.css -> 200 ; /static/js/app.js -> 200 ; /static/fonts/Vazirmatn-Regular.woff2 -> 200
+#   curl /dashboard -> 200 ; /api/products -> 200
+.venv/bin/python manage.py test 2>&1 | tail -3                      # Found 153 test(s) + OK
+git add -A && git commit --amend --no-edit                            # 76c7a2b (folded first static-route attempt + R3 correction + .gitignore/README)
+```
+
 ## 2026-10-03 — Step 1: drop the `/api/v1` layer + DRF
 ```bash
 git rm inventory/api/views.py inventory/api/serializers.py inventory/api/fields.py \

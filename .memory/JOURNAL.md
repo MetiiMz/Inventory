@@ -2,6 +2,14 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 2: gunicorn/whitenoise dropped; static served independent of DEBUG (`76c7a2b`)
+
+- **Production tooling removed:** `gunicorn` + `whitenoise` out of `requirements.txt` (now 3 lines: Django/Jinja2/openpyxl); `WhiteNoiseMiddleware` out of `MIDDLEWARE`; `STORAGES` + `WHITENOISE_MAX_AGE` removed; `staticfiles/` dir removed and dropped from `.gitignore`.
+- **Static now DEBUG-independent (R3):** `tikotime/urls.py` serves `/static/<path>` via `django.contrib.staticfiles.views.serve` with `insecure=True` — works with `DEBUG=0`, no `collectstatic`, no whitenoise. `static_v()` mtime cache-busting unchanged.
+- **Doc cleanups:** settings docstring (prod = runserver), wsgi.py docstring, jinja `static_v` docstring (no more whitenoise mention), README (dropped the production-server section, 3-lib prerequisites, `DJANGO_DEBUG` env-table note), INDEX (entry-point + requirements + settings row).
+- **Gate green:** `check` clean; grep for `gunicorn|whitenoise|collectstatic` in `tikotime inventory README.md .memory/INDEX.md` → **0**; live `DJANGO_DEBUG=0` → `/static/{css,js,font}` + dashboard + `/api/products` all **200**; `Found 153 test(s)` OK.
+- **Self-correction (spec fidelity):** my first static route used `django.views.static.serve` + `document_root=` — that is **not valid** `path()` syntax (it raised `TypeError`). Switched to the R3-approved `staticfiles.views.serve(insecure=True)` and also completed two sub-items initially skipped (`.gitignore` line, README env table). All folded into the single Step-2 commit via an amend → `76c7a2b`.
+
 ## 2026-10-03 — Step 1: `/api/v1` layer + DRF removed (`2aeb840`)
 
 - **Removed the parallel versioned layer entirely:** `inventory/api/{views,serializers,fields,exceptions,urls}.py` + `tests/test_api_v1.py` (16 tests); `rest_framework` out of `INSTALLED_APPS` and the whole `REST_FRAMEWORK` block; `djangorestframework` out of `requirements.txt`; the `api/v1/` include out of `tikotime/urls.py`; two unused compat functions (`api_brands_add`, `_page_ctx`). `inventory/api/` is now just `services.py` + `compat.py` (+`__init__.py`). Doc-only cleanups: services/compat docstrings, `inventory/views/{__init__,pages}.py`, `tikotime/urls.py`, `inventory/api/__init__.py`, README, `.memory/INDEX.md`.
