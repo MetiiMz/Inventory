@@ -2,6 +2,13 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 1: `/api/v1` layer + DRF removed (`2aeb840`)
+
+- **Removed the parallel versioned layer entirely:** `inventory/api/{views,serializers,fields,exceptions,urls}.py` + `tests/test_api_v1.py` (16 tests); `rest_framework` out of `INSTALLED_APPS` and the whole `REST_FRAMEWORK` block; `djangorestframework` out of `requirements.txt`; the `api/v1/` include out of `tikotime/urls.py`; two unused compat functions (`api_brands_add`, `_page_ctx`). `inventory/api/` is now just `services.py` + `compat.py` (+`__init__.py`). Doc-only cleanups: services/compat docstrings, `inventory/views/{__init__,pages}.py`, `tikotime/urls.py`, `inventory/api/__init__.py`, README, `.memory/INDEX.md`.
+- **Gate green:** `check` clean; `Found 153 test(s)` + `OK` (131 + N=22); live on `:8111` — `/api/v1/products` → Django **default 404 (HTML)**, legacy `/api/products` → 200 JSON, 8/8 pages 200.
+- **Two spec inconsistencies noted (NOT chased — no behaviour changed):** (1) the only surviving `api/v1` grep hit is the frozen baseline test's docstring (`tests/test_legacy_api_baseline.py:7`, FR-010 forbids editing it) — **zero** references in actual code; (2) T019's "`/api/v1/products` → JSON `{"ok": false,...}`" expectation contradicts both quickstart and the baseline — the measured result is the default Django 404 because `handler404` in `pages.py:106` is defined but **not** wired into `ROOT_URLCONF`.
+- **Left deliberately for Step 2 (I3):** `gunicorn` + `whitenoise` still in `requirements.txt`, `MIDDLEWARE`, `STORAGES`, `WHITENOISE_MAX_AGE` and the README production section.
+
 ## 2026-10-03 — Step 0: legacy `/api/*` contract frozen (`443bff6`)
 
 - **Reference test module added:** `tests/test_legacy_api_baseline.py` (563 lines, **22 tests**) — the one new test file of the whole refactor. Locks the legacy HTTP contract (`/api/*`, `/export/*`, `/data/images/*` + unknown-path behaviour) on **unmodified code**, using named key/value assertions (key order inside an object is free; list order significant).

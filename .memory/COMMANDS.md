@@ -3,6 +3,24 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 1: drop the `/api/v1` layer + DRF
+```bash
+git rm inventory/api/views.py inventory/api/serializers.py inventory/api/fields.py \
+       inventory/api/exceptions.py inventory/api/urls.py tests/test_api_v1.py
+# doc-only cleanups: tikotime/{urls,settings}.py, requirements.txt,
+#   inventory/api/{compat,services,__init__}.py, inventory/views/{__init__,pages}.py,
+#   README.md, .memory/INDEX.md   (also removed compat fns: api_brands_add, _page_ctx)
+.venv/bin/python manage.py check                                    # no issues
+grep -rn 'rest_framework\|api/v1\|djangorestframework' --include=*.py --include=*.md --include=*.txt \
+     inventory tikotime tests README.md requirements.txt
+#   -> only hit = tests/test_legacy_api_baseline.py:7 (frozen docstring; zero code refs)
+.venv/bin/python manage.py test 2>&1 | tail -4                      # Found 153 test(s) + OK (= 131 + N=22)
+.venv/bin/python manage.py runserver 127.0.0.1:8111 &               # live gate
+#   curl /api/v1/products -> 404 text/html (default Django 404, NOT JSON)
+#   curl /api/products    -> 200 application/json ; 8/8 pages -> 200
+git add -A && git commit -m 'refactor(api): drop the unused versioned /api/v1 layer and DRF'   # 2aeb840
+```
+
 ## 2026-10-03 — Step 0: freeze the legacy `/api/*` contract (reference test module)
 ```bash
 grep -c 'def test_' tests/test_legacy_api_baseline.py   # N = 22 (fix this number for all later gates)
