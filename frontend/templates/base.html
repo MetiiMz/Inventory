@@ -27,9 +27,9 @@
 <div class="shell">
   <aside class="sidebar glass">
     <div class="brand">
-      <div class="brand-mark">
+      <div class="brand-mark{% if site_icon %} has-logo{% endif %}">
         {% if site_icon %}
-        <img src="/data/images/{{ site_icon }}" alt="" style="width:26px;height:26px;object-fit:contain;border-radius:6px">
+        <img src="/data/images/{{ site_icon }}" alt="" style="width:36px;height:36px;object-fit:contain;border-radius:6px">
         {% else %}
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/><path d="M9 2.8h6M9 21.2h6M8.6 4.8 9 2.8h6l.4 2M8.6 19.2l.4 2h6l.4-2"/></svg>
         {% endif %}
