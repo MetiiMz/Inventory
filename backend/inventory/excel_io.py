@@ -39,7 +39,7 @@ PAYMENTS_HEADERS = [
 ]
 
 SALES_HEADERS = ["کد دفتر فروشگاه", "کد انبار سایت", "رفرنس", "نام ساعت", "برند",
-                 "قیمت خرید", "قیمت فروش", "قیمت نهایی", "سود",
+                 "قیمت خرید", "قیمت فروش", "سود",
                  "تاریخ فروش", "خریدار", "شماره تماس", "نوع فروش",
                  "نقدی", "کارت‌خوان", "کارت به کارت", "نوع پرداخت", "یادداشت"]
 
@@ -135,7 +135,6 @@ def export_sales(path, fmt):
     recs = Sale.objects.select_related("product").order_by("-sale_date", "-id")
     for s in recs:
         p = s.product
-        final = s.final_price or s.sale_price or 0
         rows.append([
             (p.office_code if p else "") or "",
             (p.website_code if p else "") or "",
@@ -143,7 +142,7 @@ def export_sales(path, fmt):
             (p.name if p else "") or "",
             (p.brand if p else "") or "",
             _money(p.purchase_price if p else s.purchase_price),
-            _money(s.sale_price), _money(final), _money(s.profit),
+            _money(s.sale_price), _money(s.profit),
             _jdate_from_iso(s.sale_date), s.customer, s.customer_phone,
             SALE_TYPE_FA.get(s.sale_type, s.sale_type),
             _money(s.paid_cash), _money(s.paid_pos), _money(s.paid_card2card),

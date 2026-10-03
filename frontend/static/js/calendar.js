@@ -93,7 +93,7 @@ async function selectDay(iso, btn) {
 function eventItem(e, kind) {
   const cfg = {
     buy:    { color: "blue",  tag: "خرید",  price: e.purchase_price_display || e.total_value_display || e.price_display || "" },
-    sell:   { color: "green", tag: "فروش",  price: e.final_price_display || e.sale_price_display || e.price_display || "" },
+    sell:   { color: "green", tag: "فروش",  price: e.sale_price_display || e.price_display || "" },
     rep_in: { color: "amber", tag: "دریافت برای تعمیر", price: "" },
     rep_out:{ color: "gray",  tag: "بازگشت به مشتری",   price: "" },
   }[kind];
@@ -167,8 +167,7 @@ function showEventDetail(kind, id) {
     add("کد انبار سایت", d.website_code ? `<span class="code-pill">${esc(d.website_code)}</span>` : "");
     add("برند", esc(d.brand));
     add("رفرنس", esc(d.reference));
-    add("قیمت فروش ساعت", d.sale_price_display + " تومان");
-    add("قیمت نهایی فروش", d.final_price_display + " تومان");
+    add("قیمت فروش", d.sale_price_display + " تومان");
     add("سود این فروش", `<span style="color:var(--green)">${d.profit_display} تومان</span>`);
     add("خریدار", esc(d.customer));
     add("شماره تماس خریدار", d.customer_phone_fa || "");
@@ -232,7 +231,7 @@ function renderDayPanel(day) {
     </div>`;
   }
   if (sc) {
-    const sellTotal = day.sales.reduce((s, x) => s + (Number(x.final_price) || Number(x.sale_price) || 0), 0);
+    const sellTotal = day.sales.reduce((s, x) => s + (Number(x.sale_price) || 0), 0);
     html += `<div class="event-group">
       <div class="event-group-title"><span class="g-dot" style="background:var(--green)"></span>فروش‌ها (${faNum(sc)})</div>
       ${day.sales.map((x) => eventItem(x, "sell")).join("")}

@@ -111,6 +111,21 @@ class CompatSaleContractTests(TestCase):
         self.assertTrue(r.json()["ok"])
         self.assertTrue(Product.objects.get(id=p.id).available)
 
+    def test_legacy_discount_price_payloads_are_inert(self):
+        # Spec-002: old payload keys are accepted but ignored — no crash,
+        # no effect on the entered sale price
+        p = make_product()
+        r = self.client.post("/api/sales", sale_payload(
+            p.id, discount_price="999999"), content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        sale = r.json()["sale"]
+        self.assertEqual(sale["sale_price"], 1500000)
+        r = self.client.put(f"/api/sales/{sale['id']}",
+                            data=json.dumps(sale_payload(p.id, discount_price="42")),
+                            content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["sale"]["sale_price"], 1500000)
+
 
 class CompatPaymentContractTests(TestCase):
     """Legacy /api/payments — ok() envelope with items+summary."""
