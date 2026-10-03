@@ -1,4 +1,4 @@
-"""WSGI entry point — gunicorn tikotime.wsgi"""
+"""WSGI entry point — tikotime.wsgi (served via ``manage.py runserver``)"""
 import os
 
 from django.core.wsgi import get_wsgi_application

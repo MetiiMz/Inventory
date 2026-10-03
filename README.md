@@ -21,7 +21,7 @@ inventory/api/
 
 ### پیش‌نیازها
 - پایتون ۳.۱۰ یا بالاتر (تا نسخه‌ی ۳.۱۴ تست شده) — اگر نصب نیست از [python.org](https://www.python.org/downloads/) بگیرید. در ویندوز حتماً گزینه‌ی «Add Python to PATH» را تیک بزنید.
-- بقیه‌ی پیش‌نیازها داخل `requirements.txt` هستند: Django، Jinja2، gunicorn، whitenoise و openpyxl.
+- بقیه‌ی پیش‌نیازها داخل `requirements.txt` هستند: Django، Jinja2 و openpyxl.
 
 ### نصب (فقط بار اول)
 
@@ -55,21 +55,12 @@ python -m venv .venv
 
 > بعد از اولین اجرا، همه‌چیز کاملاً آفلاین کار می‌کند و به اینترنت نیازی نیست.
 
-### اجرا در حالت تولید (سرور)
-
-```bash
-.venv/bin/python manage.py collectstatic --noinput
-.venv/bin/gunicorn tikotime.wsgi -b 0.0.0.0:8000
-```
-
-این دستور با وب‌سرور آماده‌ی production (gunicorn + whitenoise) بالا می‌آید و برای systemd یا Docker مناسب است.
-
 ### متغیرهای محیطی (اختیاری)
 
 | متغیر | پیش‌فرض | توضیح |
 |---|---|---|
 | `TIKOTIME_DB` | `data/db.sqlite3` | مسیر فایل پایگاه‌داده (مثلاً برای تست: `TIKOTIME_DB=/tmp/test.db`) |
-| `DJANGO_DEBUG` | `1` | روی سرور روی `0` بگذارید |
+| `DJANGO_DEBUG` | `1` | روی `0` هم کار می‌کند؛ دارایی‌های استاتیک در هر حالتی لود می‌شوند |
 | `DJANGO_SECRET_KEY` | کلید توسعه | روی سرور حتماً یک مقدار تصادفی اختصاصی بگذارید |
 
 ---

@@ -11,9 +11,6 @@ dist/
 *.egg-info/
 *.egg
 
-# Django collected static (whitenoise)
-staticfiles/
-
 # Runtime data: live DBs, user images, backups, exports
 data/
 

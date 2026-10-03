@@ -2,7 +2,7 @@
 Django settings for the TikoTime watch-inventory project.
 
 توسعه:  .venv/bin/python manage.py runserver
-تولید:  .venv/bin/gunicorn tikotime.wsgi
+تولید:  .venv/bin/python manage.py runserver
 مسیر دیتابیس برای تست:  TIKOTIME_DB=/tmp/test.db
 """
 
@@ -23,8 +23,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # Whitenoise: سرو استاتیک با فشرده‌سازی و کش — سریع‌ترین حالت ممکن
-    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
 ]
 
@@ -77,13 +75,6 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
-    },
-}
-# حداکثر سرعت: کش یک‌ساله برای استاتیک‌ها
-WHITENOISE_MAX_AGE = 60 * 60 * 24 * 365
 
 # ---------------------------------------------------------------- uploads
 DATA_UPLOAD_MAX_MEMORY_SIZE = 32 * 1024 * 1024

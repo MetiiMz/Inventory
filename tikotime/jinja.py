@@ -32,8 +32,8 @@ TRACKING_STATUS_COLOR = {
 def static_v(path):
     """آدرس static با نسخه‌ی mtime فایل — کش مرورگر را با هر تغییر می‌شکند.
 
-    وایت‌نویز استاتیک‌ها را تا یک سال کش می‌کند (WHITENOISE_MAX_AGE)، پس
-    بدون ?v= تغییرات CSS/JS تا یک سال دیده نمی‌شود.
+    پس از هر تغییر در CSS/JS، ?v=mtime آپدیت می‌شود و مرورگر نسخه‌ی
+    تازه را می‌گیرد — بدون هیچ گام جمع‌آوری یا وایرالینگ.
     """
     fs = os.path.join(str(settings.BASE_DIR), "static", path)
     try:

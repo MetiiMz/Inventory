@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 """URL configuration.
 
-Two kinds of routes:
+Three kinds of routes:
 
 * ``/dashboard``, ``/products`` … — HTML page shells (``inventory.views.pages``);
 * ``/api/*``, ``/export/*``, ``/data/images/*`` — the legacy-shape
   endpoints (``inventory.api.compat``) the current frontend calls; these
   are the app's sole API contract, backed by the shared service layer
-  (``inventory.api.services``).
+  (``inventory.api.services``);
+* ``/static/<path>`` — static assets (CSS/JS/fonts), served via
+  ``django.contrib.staticfiles.views.serve(insecure=True)``; works
+  regardless of ``DEBUG`` (R3).
 """
+from django.contrib.staticfiles.views import serve as serve_static
 from django.urls import path
 
 from inventory.api import compat
@@ -88,4 +92,8 @@ urlpatterns = [
     # settings
     path("api/settings", compat.api_settings),
     path("api/settings/site-icon", compat.api_settings_site_icon),
+
+    # static assets — works in any DEBUG mode (R3): insecure=True lets the
+    # dev view serve outside DEBUG too (no separate static tooling needed)
+    path("static/<path:path>", serve_static, {"insecure": True}),
 ]

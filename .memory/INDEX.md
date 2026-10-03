@@ -7,14 +7,14 @@
 - **Name:** TikoTime — سیستم مدیریت انبار فروشگاه ساعت (Watch Shop Inventory Management)
 - **Type:** Fully local, offline-first, Persian (Farsi) web app with Jalali (Shamsi) calendar
 - **Stack:** Django 5.2 + Jinja2 (django-jinja env) + SQLite + vanilla JS. Legacy Flask code **fully removed** (2026-09-08 — port verified before deletion).
-- **Entry point (target):** `manage.py runserver` / gunicorn inside `.venv` — user explicitly wants `requirements.txt`, NO shell script.
+- **Entry point:** `manage.py runserver` inside `.venv` — user explicitly wants `requirements.txt`, NO shell script.
 - **UI/UX:** frozen by user decision — existing templates/static/js must render unchanged.
-- Requirements (pinned): Django==5.2.6, Jinja2==3.1.6, gunicorn==23.0.0, whitenoise==6.11.0, openpyxl==3.1.5
+- Requirements (pinned): Django==5.2.6, Jinja2==3.1.6, openpyxl==3.1.5
 
 ## Key Files (Django rewrite — in progress)
 | File | Purpose | Status |
 |---|---|---|
-| `tikotime/settings.py` | Django settings (SQLite in `data/`, whitenoise) | done |
+| `tikotime/settings.py` | Django settings (SQLite in `data/`, explicit static route) | done |
 | `tikotime/urls.py` | page routes + the legacy-shape `/api/*` routes (the app's sole API contract) | done |
 | `tikotime/jinja.py` | Jinja2 env with fa_* helpers + template globals | done |
 | `inventory/models.py` | ORM: Setting/Product/Sale/Payment/Repair/Tracking, true PK/FK + indexes | done |
