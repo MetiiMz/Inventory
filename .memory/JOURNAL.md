@@ -2,6 +2,16 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 5: physical three-part layout db/ + backend/ + frontend/ (`af09572`)
+
+- **Move:** `data/`→`db/` (plain `mv`; data is gitignored/untracked), app code (`manage.py`, `requirements.txt`, `tests/`, `tikotime/`, `inventory/`)→`backend/` via `git mv`, and `static/`+`templates/`→`frontend/` via `git mv`. `__pycache__` cleaned; rescue snapshot at `/tmp/tiko-preflight/data`.
+- **Single path source:** `backend/tikotime/settings.py` — `DATA_DIR=BASE_DIR.parent/"db"`, `STATIC_DIR=…/frontend/static`, `TEMPLATES[0]["DIRS"]=[…/frontend/templates]`; `DB_PATH` keeps the `TIKOTIME_DB` override. `backend/inventory/utils.py` now reads `settings.IMG_DIR/BACKUP_DIR` (was `__file__`-relative → would have pointed at `backend/data`); `jinja.py:static_v` reads `settings.STATIC_DIR`; `export_import.py` collapses the two export-dir builders into one `_export_dir()` (still `settings.DATA_DIR`-derived; **no** `EXPORT_DIR` setting, so `override_settings(DATA_DIR=tmp)` tests keep working). `.gitignore`: `data/`→`db/`.
+- **No-Django window honored:** T047–T051 ran with **zero** Django invocations (a settings `mkdir` on import would otherwise recreate a stray `data/` before the `mv`).
+- **Gates green:** image-set **0-diff** (155 = 155) · `db/` has all 5 entries · no stray `data/` · from `backend/`: `Found 153 test(s)` + `OK`, `check` clean, `makemigrations --check` No changes · 8 pages **200** (index 302) + new `frontend/static` css/js **200** + a `db/images` image **200** + `/export/products.csv` **200** (file landed in `db/exports/`, then removed).
+- **⚠ sha256 gate (user-requested):** `sha256 db/db.sqlite3` = `f753fc…444f` — exact match to the T001 baseline in `.memory/COMMANDS.md`, both pre-move and after all runserver sessions; the live DB is byte-unchanged.
+- **⚠ Pre-existing test-isolation gap (flagged, not fixed):** `backend/tests/test_services_misc.py`'s `UploadServiceTests` calls `save_upload` without isolating `IMG_DIR`, so every full-suite run writes two 1×1 fixture PNGs into the real `db/images/`. Both identified (58 bytes, the test's `PNG` constant) and removed to restore the 155-image set. **Out of scope to fix** because FR-010 forbids editing that test file; tracked as a follow-up. Outputs are gitignored, so the commit is unaffected.
+- **Docs:** `README.md` (three-part tree, `backend/` run/install commands, `db/db.sqlite3` default) + `.memory/INDEX.md` (db/ paths, backend/+frontend/ layout, run command, key-file table) + `.claude/PROGRESS.md` updated.
+
 ## 2026-10-03 — Step 4: compat.py split into the 11-module adapter package (`97bad70`)
 
 - **Split:** `inventory/api/compat.py` (561 lines) → `inventory/api/compat/` package with 11 modules — `common` (`_body`/`_ok`/`_fail`/`_guard`/`_attachment`), `products`, `sales`, `payments`, `repairs`, `tracking`, `calendar`, `reports`, `settings` (brands + settings/icon), `uploads` (upload + serve_image), `backups_export` (Excel import/export + db backups + database clear). Mapped **by function name** (common/settings/backups_export each span two source ranges). `git rm` the old file. Largest module = `backups_export.py` (162 lines) ≤ 400.

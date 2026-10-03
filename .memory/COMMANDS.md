@@ -3,6 +3,41 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 5: physical three-part layout db/ + backend/ + frontend/
+```bash
+# T047 prep (NO Django in the T047-T051 window; settings mkdir on import would recreate data/)
+pgrep -af 'manage[.]py runserver'      # safe regex: 'manage.py runserver' self-matches pkill -f
+cp -a data /tmp/tiko-preflight/data    # rescue snapshot (18M)
+find . -name __pycache__ -not -path './.venv/*' -type d -exec rm -rf {} +
+find data/images -maxdepth 1 -type f -printf '%f\n' | sort > /tmp/tiko-images-before.txt   # 155
+# T048 move data (untracked -> plain mv, NOT git mv)
+mv data db
+find db/images -maxdepth 1 -type f -printf '%f\n' | sort | diff - /tmp/tiko-images-before.txt   # 0 diff
+test -d data && echo UNEXPECTED || echo 'OK: no stray data/'
+sha256sum db/db.sqlite3   # f753fc...444f == T001 baseline (user gate)
+# T049 + T050 moves
+mkdir -p frontend && git mv static frontend/static && git mv templates frontend/templates
+mkdir -p backend && git mv manage.py requirements.txt tests tikotime inventory backend/
+# T051-T053 path fixes: settings.py (DATA_DIR=../db, STATIC_DIR/TEMPLATES=../frontend/*),
+#   utils.py (IMG_DIR/BACKUP_DIR = settings.*), jinja.py static_v (settings.STATIC_DIR)
+# T057 export_import.py -> single _export_dir() (settings.DATA_DIR-derived; no EXPORT_DIR)
+# T054 .gitignore data/->db/ ; T055 README ; T056 .memory/INDEX + .claude/PROGRESS
+# T058 gate
+cd backend && ../.venv/bin/python manage.py test 2>&1 | tail -4    # Found 153 test(s) + OK
+../.venv/bin/python manage.py check                                # no issues
+../.venv/bin/python manage.py makemigrations --check --dry-run     # No changes detected
+cd .. && test -d data && echo UNEXPECTED || echo 'OK: no stray data/'
+# T059 manual (runserver against real db, read-only + one export)
+.venv/bin/python backend/manage.py runserver 127.0.0.1:PORT   # 8 pages=200 (index 302)
+#   /static/css/*.css=200  /static/js/*.js=200  /data/images/<f>=200  /export/products.csv=200 -> db/exports/ (then rm)
+#   full-suite side-effect: 2 fixture 1x1 PNGs in db/images (test_services_misc UploadServiceTests)
+#     -> identified + rm -> image set back to 155 (0-diff vs T047)
+sha256sum db/db.sqlite3   # still f753fc...444f
+# T060 commit
+git add -A && git status --short | grep -E 'db/'     # -> none (zero db/ files staged)
+git commit -m 'refactor: reorganize into db/ backend/ frontend/ with a single path source'   # af09572
+```
+
 ## 2026-10-03 — Step 4: split compat.py into the 11-module compat/ package
 ```bash
 # T039 prep: back up before deleting (no stale compat/ dir this time)
