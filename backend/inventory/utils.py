@@ -2,14 +2,14 @@
 import datetime
 import os
 
+from django.conf import settings
+
 from inventory.jalali import (
     MONTH_NAMES, WEEKDAY_NAMES, fa_num, gregorian_to_jalali, parse_jalali_date,
 )
 
-IMG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       "data", "images")
-BACKUP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "data", "backups")
+IMG_DIR = settings.IMG_DIR
+BACKUP_DIR = settings.BACKUP_DIR
 
 SALE_TYPE_FA = {"person": "حضوری", "online": "آنلاین"}
 

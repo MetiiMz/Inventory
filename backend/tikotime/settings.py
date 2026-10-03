@@ -1,8 +1,12 @@
 """
 Django settings for the TikoTime watch-inventory project.
 
-توسعه:  .venv/bin/python manage.py runserver
-تولید:  .venv/bin/python manage.py runserver
+Single source of truth for every on-disk path. ``BASE_DIR`` is ``backend/``
+(this file's parent's parent); the data root (``db/``) and the display-asset
+roots (``frontend/static``, ``frontend/templates``) live a level up, at the
+project root, and are located relative to it.
+
+اجرای محلی:  .venv/bin/python backend/manage.py runserver
 مسیر دیتابیس برای تست:  TIKOTIME_DB=/tmp/test.db
 """
 
@@ -32,7 +36,7 @@ TEMPLATES = [
     {
         # همان قالب‌های Jinja2 نسخه‌ی Flask — UI دست‌نخورده
         "BACKEND": "django.template.backends.jinja2.Jinja2",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR.parent / "frontend" / "templates"],
         "APP_DIRS": False,
         "OPTIONS": {
             "environment": "tikotime.jinja.environment",
@@ -44,7 +48,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "tikotime.wsgi.application"
 
 # ---------------------------------------------------------------- database
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = BASE_DIR.parent / "db"
 IMG_DIR = DATA_DIR / "images"
 BACKUP_DIR = DATA_DIR / "backups"
 DB_PATH = os.environ.get("TIKOTIME_DB") or str(DATA_DIR / "db.sqlite3")
@@ -73,7 +77,8 @@ USE_TZ = True
 
 # ---------------------------------------------------------------- static
 STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_DIR = BASE_DIR.parent / "frontend" / "static"
+STATICFILES_DIRS = [STATIC_DIR]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # ---------------------------------------------------------------- uploads

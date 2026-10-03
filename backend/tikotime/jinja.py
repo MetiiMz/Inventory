@@ -35,7 +35,7 @@ def static_v(path):
     پس از هر تغییر در CSS/JS، ?v=mtime آپدیت می‌شود و مرورگر نسخه‌ی
     تازه را می‌گیرد — بدون هیچ گام جمع‌آوری یا وایرالینگ.
     """
-    fs = os.path.join(str(settings.BASE_DIR), "static", path)
+    fs = str(settings.STATIC_DIR / path)
     try:
         v = int(os.path.getmtime(fs))
     except OSError:

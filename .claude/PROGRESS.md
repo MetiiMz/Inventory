@@ -1,6 +1,11 @@
-# PROGRESS — API-first backend + full test suite COMPLETE (2026-09-10)
+# PROGRESS — session status
 
-## وضعیت: تکمیل شد ✔ — بک‌اند کاملاً API‌محور + ۱۴۷ تست سبز
+## جلسه‌ی ۲۰۲۶-۱۰-۰۳ — Restructure layout (spec 001) در حال اجرا
+- گام‌های ۰ تا ۵ انجام شد: قفل قرارداد لگاسی، حذف DRF/لایه‌ی موازی، اجرا+استاتیک مستقل از DEBUG، `services/` و `compat/` (پکیج ۱۱ ماژولی)، و **چیدمان سه‌بخشی `db/` + `backend/` + `frontend/`** (تک منبع حقیقت مسیرها = `backend/tikotime/settings.py`).
+- اجرای کنونی: `.venv/bin/python backend/manage.py runserver` · ۱۵۳ تست سبز · جابه‌جایی‌ها بازگردان‌پذیرند (`mv db data` / `git mv` بازگشت).
+- نکته‌ی آتی: `backend/tests/test_services_misc.py` (کلاس `UploadServiceTests`) در هر اجرای کامل، دو تصویر fixture ۱×۱ را در `db/images/` می‌نویسد چون `IMG_DIR` را ایزوله نمی‌کند؛ FR-010 ویرایش این تست را در این refactor ممنوع می‌کند → پیگیری جدا (خروجی‌ها gitignored هستند و commit نمی‌شوند).
+
+## جلسه‌ی ۲۰۲۶-۰۹-۱۰ — API-first backend + full test suite (آرشیو)
 
 ## کارهای امروز (به ترتیب commit)
 1. `9668798→96687f8` **refactor(api):** حذف کامل ویوهای تابعی قدیمی (`inventory/views/*` — ۱۲ فایل، ~۱٬۵۵۰ خط). فقط `pages.py` (شِل HTML) ماند. همه‌ی قواعد کسب‌وکار به **`inventory/api/services.py`** (تک منبع حقیقت) منتقل شد؛ `/api/v1/` حالا مستقیم از سرویس‌ها می‌نویسد (PATCH بومی، بدون آداپتور `_legacy`)؛ `exceptions.py` خطای `ApiError` را به `{"error": …, "ok": false}` استاندارد تبدیل می‌کند.

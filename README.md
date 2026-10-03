@@ -2,17 +2,23 @@
 
 سیستم کامل مدیریت انبار، فروش، تعمیرات و سفارش‌های فروشگاه ساعت — کاملاً محلی، آفلاین، فارسی و با تقویم شمسی.
 
-> **نسخه‌ی فعلی روی Django 5.2 بازنویسی شده است.** بک‌اند کاملاً API‌محور است: همه‌ی منطق کسب‌وکار در لایه‌ی سرویس (`inventory/api/services.py`) جمع شده و مسیرهای `/api/*` (آداپتورهای `inventory/api/compat.py` با همان شکل پاسخ قدیمی) روی همان سرویس‌ها بنا شده‌اند — این تنها قرارداد HTTP برنامه است. فرانت‌اند (قالب‌ها و JS) دست‌نخورده باقی مانده و کد قدیمی Flask به‌طور کامل حذف شده است.
+> **نسخه‌ی فعلی روی Django 5.2 بازنویسی شده است.** بک‌اند کاملاً API‌محور است: همه‌ی منطق کسب‌وکار در لایه‌ی سرویس (`backend/inventory/api/services/`) جمع شده و مسیرهای `/api/*` (آداپتورهای `backend/inventory/api/compat/` با همان شکل پاسخ قدیمی) روی همان سرویس‌ها بنا شده‌اند — این تنها قرارداد HTTP برنامه است. فرانت‌اند (قالب‌ها و JS) دست‌نخورده باقی مانده و کد قدیمی Flask به‌طور کامل حذف شده است.
 
 ---
 
-## معماری بک‌اند (API-first)
+## چیدمان سه‌بخشی
 
 ```
-inventory/api/
-├── services.py     # تمام قواعد کسب‌وکار (اعتبارسنجی + نوشتن‌های تراکنشی) — تک منبع حقیقت
-└── compat.py       # آداپتورهای /api/* با شکل پاسخ قدیمی (بدون منطق، روی services)
+.
+├── db/              # داده‌ی اجرایی (تحت کنترل نسخه نیست): db.sqlite3 · images/ · backups/ · exports/
+├── backend/         # کد بک‌اند Django: manage.py · tikotime/ · inventory/ · tests/
+│   └── inventory/api/
+│       ├── services/    # تمام قواعد کسب‌وکار — تک منبع حقیقت (۱۱ ماژول دامنه‌ای + باز‌export)
+│       └── compat/      # آداپتورهای /api/* با شکل پاسخ قدیمی (۱۱ ماژول + باز‌export)
+└── frontend/        # دارایی‌های نمایش: static/ (css/js/fonts) · templates/
 ```
+
+- **تک منبع حقیقت مسیرها**: `backend/tikotime/settings.py`. داده‌ها (`db/`) و دارایی‌های نمایش (`frontend/`) یک سطح بالاتر از `backend/` — یعنی در ریشه‌ی پروژه — قرار دارند.
 
 - **`/api/*`** — تنها قرارداد API برنامه: همان مسیرهایی که فرانت‌اند فعلی صدا می‌زند (CRUD کامل محصولات/فروش‌ها/پرداخت‌ها/تعمیرات/پیگیری‌ها، تقویم، بکاپ، تنظیمات، خروجی/ورودی)؛ فقط آداپتور نازک روی `services.py`، بدون منطق.
 
@@ -28,27 +34,27 @@ inventory/api/
 **لینوکس / مک:**
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python manage.py migrate
+.venv/bin/pip install -r backend/requirements.txt
+.venv/bin/python backend/manage.py migrate
 ```
 
 **ویندوز (در PowerShell یا CMD داخل پوشه‌ی پروژه):**
 ```bat
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\python manage.py migrate
+.venv\Scripts\pip install -r backend\requirements.txt
+.venv\Scripts\python backend\manage.py migrate
 ```
 
 ### اجرا
 
 **لینوکس / مک:**
 ```bash
-.venv/bin/python manage.py runserver
+.venv/bin/python backend/manage.py runserver
 ```
 
 **ویندوز:**
 ```bat
-.venv\Scripts\python manage.py runserver
+.venv\Scripts\python backend\manage.py runserver
 ```
 
 سپس در مرورگر باز کنید: **http://127.0.0.1:8000**
@@ -59,7 +65,7 @@ python -m venv .venv
 
 | متغیر | پیش‌فرض | توضیح |
 |---|---|---|
-| `TIKOTIME_DB` | `data/db.sqlite3` | مسیر فایل پایگاه‌داده (مثلاً برای تست: `TIKOTIME_DB=/tmp/test.db`) |
+| `TIKOTIME_DB` | `db/db.sqlite3` | مسیر فایل پایگاه‌داده (مثلاً برای تست: `TIKOTIME_DB=/tmp/test.db`) |
 | `DJANGO_DEBUG` | `1` | روی `0` هم کار می‌کند؛ دارایی‌های استاتیک در هر حالتی لود می‌شوند |
 | `DJANGO_SECRET_KEY` | کلید توسعه | روی سرور حتماً یک مقدار تصادفی اختصاصی بگذارید |
 

@@ -23,12 +23,18 @@ def _export_funcs():
     }
 
 
+def _export_dir():
+    """The single export/import scratch dir, derived from the data root."""
+    export_dir = os.path.join(str(settings.DATA_DIR), "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    return export_dir
+
+
 def export_data_file(kind, fmt):
     """Generate an export file; returns ``(path, filename)``."""
     if fmt not in ("xlsx", "csv") or kind not in _export_funcs():
         raise ApiError(404, "یافت نشد")
-    export_dir = os.path.join(str(settings.DATA_DIR), "exports")
-    os.makedirs(export_dir, exist_ok=True)
+    export_dir = _export_dir()
     stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
     name = f"{kind}_{stamp}.{fmt}"
     path = os.path.join(export_dir, name)
@@ -42,8 +48,7 @@ def import_products_file(uploaded_file, update_existing=False):
     if ext not in (".csv", ".xlsx", ".xlsm"):
         raise ApiError(400, "فقط فایل csv یا xlsx پذیرفته می‌شود")
     from inventory.excel_io import import_products
-    export_dir = os.path.join(str(settings.DATA_DIR), "exports")
-    os.makedirs(export_dir, exist_ok=True)
+    export_dir = _export_dir()
     tmp_path = os.path.join(export_dir, "import_tmp" + ext)
     with open(tmp_path, "wb") as out:
         for chunk in uploaded_file.chunks():

@@ -12,9 +12,9 @@ dist/
 *.egg
 
 # Runtime data: live DBs, user images, backups, exports
-data/
+db/
 
-# SQLite safety net (in case TIKOTIME_DB points outside data/)
+# SQLite safety net (in case TIKOTIME_DB points outside db/)
 *.sqlite3
 *.sqlite3-journal
 *.sqlite3-wal

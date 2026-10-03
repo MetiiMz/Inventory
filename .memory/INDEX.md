@@ -7,24 +7,27 @@
 - **Name:** TikoTime — سیستم مدیریت انبار فروشگاه ساعت (Watch Shop Inventory Management)
 - **Type:** Fully local, offline-first, Persian (Farsi) web app with Jalali (Shamsi) calendar
 - **Stack:** Django 5.2 + Jinja2 (django-jinja env) + SQLite + vanilla JS. Legacy Flask code **fully removed** (2026-09-08 — port verified before deletion).
-- **Entry point:** `manage.py runserver` inside `.venv` — user explicitly wants `requirements.txt`, NO shell script.
+- **Entry point:** `.venv/bin/python backend/manage.py runserver` — three-part layout `db/` + `backend/` + `frontend/` (2026-10-03). User explicitly wants `requirements.txt`, NO shell script.
 - **UI/UX:** frozen by user decision — existing templates/static/js must render unchanged.
 - Requirements (pinned): Django==5.2.6, Jinja2==3.1.6, openpyxl==3.1.5
 
 ## Key Files (Django rewrite — in progress)
 | File | Purpose | Status |
 |---|---|---|
-| `tikotime/settings.py` | Django settings (SQLite in `data/`, explicit static route) | done |
-| `tikotime/urls.py` | page routes + the legacy-shape `/api/*` routes (the app's sole API contract) | done |
-| `tikotime/jinja.py` | Jinja2 env with fa_* helpers + template globals | done |
-| `inventory/models.py` | ORM: Setting/Product/Sale/Payment/Repair/Tracking, true PK/FK + indexes | done |
-| `inventory/utils.py` | fa_* helpers, parsers, dict serializers (legacy JSON shape) | done |
-| `inventory/reports.py` | dashboard stats via ORM aggregates | done |
-| `inventory/jalali.py` | Jalali conversion (unchanged port) | done |
-| `inventory/views/` | products, sales, payments, repairs, tracking, calendar, pages, shared (brands/upload/images), backups, exportimport, settings_api, common | done |
-| `inventory/migrations/` | Django migrations (0001_initial; 0002 +0003 = quantity add/remove history; 0004 = Sale/Payment `settled_at`; 0005 = seed store_name «Tick O Time») | done |
-| `inventory/excel_io.py` | Excel/CSV import-export via openpyxl (Persian headers) | done |
-| `README.md` | Persian run/usage guide (rewritten 2026-09-06) | done |
+| `backend/tikotime/settings.py` | Django settings — the single path source (SQLite in `db/`, static in `frontend/static`, templates in `frontend/templates`) | done |
+| `backend/tikotime/urls.py` | page routes + the legacy-shape `/api/*` routes (the app's sole API contract) | done |
+| `backend/tikotime/jinja.py` | Jinja2 env with fa_* helpers + template globals (cache-busting `static_v` reads `settings.STATIC_DIR`) | done |
+| `backend/inventory/models.py` | ORM: Setting/Product/Sale/Payment/Repair/Tracking, true PK/FK + indexes | done |
+| `backend/inventory/utils.py` | fa_* helpers, parsers, dict serializers; `IMG_DIR`/`BACKUP_DIR` now read from `settings` | done |
+| `backend/inventory/reports.py` | dashboard stats via ORM aggregates | done |
+| `backend/inventory/jalali.py` | Jalali conversion (unchanged port) | done |
+| `backend/inventory/dbhelpers.py` | brands/backup/database-clear helpers (read `settings.*`) | done |
+| `backend/inventory/api/services/` | business rules — single source of truth (11 domain modules + re-exporting `__init__`) | done |
+| `backend/inventory/api/compat/` | the `/api/*` adapters in the legacy response shape (11 domain modules + re-exporting `__init__`) | done |
+| `backend/inventory/views/pages.py` | one thin HTML-page renderer per route | done |
+| `backend/inventory/excel_io.py` | Excel/CSV import-export via openpyxl (Persian headers) | done |
+| `frontend/static/` + `frontend/templates/` | display assets + the frozen Jinja2 templates | done |
+| `README.md` | Persian run/usage guide (updated 2026-10-03 for the three-part layout) | done |
 | ~~`legacy_flask/`~~ | removed 2026-09-08 — port complete, no references remain | deleted |
 
 ## Core Domain Concepts
@@ -35,8 +38,8 @@
 - Single-user, no auth by design (add login before public deployment)
 
 ## Data Locations
-- `data/watch_inventory.db` — SQLite DB
-- `data/images/`, `data/backups/`, `data/exports/`
+- Data root is `db/` (gitignored, **not** under version control): `db/db.sqlite3` (the live DB Django uses), `db/images/`, `db/backups/`, `db/exports/`.
+- `db/watch_inventory.db` — the OLD Flask-era DB, kept alongside; **not** used by Django.
 
 ## Conventions for This Memory System
 - Journal entries are written in `JOURNAL.md` in GitHub-commit style:
@@ -73,7 +76,7 @@
 - Every command executed must be logged in `.memory/COMMANDS.md` (user request).
 
 ## Facts verified by E2E suite (2026-09-06, 75/75 PASS)
-- Isolated test DB via env var: `TIKOTIME_DB=/tmp/xxx.db` is honored by `tikotime/settings.py` — use it for any DB-touching test; real `data/watch_inventory.db` stays untouched.
+- Isolated test DB via env var: `TIKOTIME_DB=/tmp/xxx.db` is honored by `backend/tikotime/settings.py` — use it for any DB-touching test; the real `db/db.sqlite3` stays untouched.
 - Repairs statuses: `received | in_progress | waiting_parts | done | delivered` (delivered sets `return_date` to today automatically via `/api/repairs/<id>/status`).
 - Tracking statuses: `new | ordered | found | delivered | cancelled`.
 - Image upload `/api/upload` returns key `path` (JS uses `res.path`); served at `/data/images/<name>`.
