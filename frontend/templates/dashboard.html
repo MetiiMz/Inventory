@@ -23,29 +23,29 @@
 
   <div class="stat-card glass">
     <div class="stat-head">
-      <span class="stat-label">ارزش فروش کل انبار</span>
+      <span class="stat-label">مجموع فروش سال جاری</span>
       <span class="stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 12 3.5l8.5 5v7L12 20.5l-8.5-5z"/><path d="M3.5 8.5 12 13l8.5-4.5M12 13v7.5"/></svg></span>
     </div>
-    <div class="stat-value stat-flex"><span class="stat-num">{{ fa_money(stats.total_sale_value) }}</span><span class="unit">تومان</span></div>
-    <div class="stat-sub">ارزش فروش ساعت‌های موجود</div>
+    <div class="stat-value stat-flex"><span class="stat-num">{{ fa_money(stats.sold_revenue) }}</span><span class="unit">تومان</span></div>
+    <div class="stat-sub">بر اساس فروش‌های ثبت‌شده در سال جلالی جاری</div>
   </div>
 
   <div class="stat-card glass">
     <div class="stat-head">
-      <span class="stat-label">سود انبار (بالقوه)</span>
+      <span class="stat-label">سود سال جاری</span>
       <span class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17.5 9.5 12l3.5 3.5L20 8.5"/><path d="M15 8.5h5v5"/></svg></span>
     </div>
-    <div class="stat-value stat-flex" style="color: var(--green)"><span class="stat-num">{{ fa_money(stats.total_profit_value) }}</span><span class="unit">تومان</span></div>
-    <div class="stat-sub">اگر همه‌ی موجودی به قیمت فروش فروخته شود</div>
+    <div class="stat-value stat-flex" style="color: var(--green)"><span class="stat-num">{{ fa_money(stats.sold_profit) }}</span><span class="unit">تومان</span></div>
+    <div class="stat-sub">جمع سود فروش‌های سال جلالی جاری</div>
   </div>
 
   <div class="stat-card glass">
     <div class="stat-head">
-      <span class="stat-label">فروش‌های ثبت‌شده</span>
+      <span class="stat-label">تعداد فروش سال جاری</span>
       <span class="stat-icon purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5h11l1.5 12.5h-14z"/><path d="M9 9.5a3 3 0 0 1 6 0"/></svg></span>
     </div>
     <div class="stat-value stat-flex"><span class="stat-num">{{ fa_num(stats.sold_count) }}</span><span class="unit">فقره</span></div>
-    <div class="stat-sub">درآمد {{ fa_money(stats.sold_revenue) }} تومان</div>
+    <div class="stat-sub">در سال جلالی جاری</div>
   </div>
 
   <div class="stat-card glass">
@@ -84,6 +84,8 @@
         <span><span class="lg-dot" style="background: var(--accent)"></span>فروش</span>
         <span><span class="lg-dot" style="background: var(--amber)"></span>خرید</span>
         <span><span class="lg-dot" style="background: var(--green)"></span>سود فروش</span>
+        <span><span style="display:inline-block;width:14px;border-top:2px dashed var(--text-3)"></span>تعداد حضوری</span>
+        <span><span style="display:inline-block;width:14px;border-top:2px dashed var(--purple)"></span>تعداد آنلاین</span>
       </div>
     </div>
     <div class="chart-box" id="sales-chart" data-monthly='{{ monthly | tojson }}'></div>
@@ -102,7 +104,7 @@
 <div class="mt-14">
   <section class="glass card">
     <div class="card-title">
-      <h3>انبار بر اساس برند</h3>
+      <h3>فروش بر اساس برند</h3>
       <span class="badge blue plain">{{ fa_num(brands | length) }} برند</span>
     </div>
     {% if brands %}
@@ -110,19 +112,19 @@
       <table class="data compact">
         <thead><tr>
           <th>برند</th>
-          <th>تعداد در انبار</th>
-          <th>جمع ارزش خرید</th>
+          <th>تعداد فروش</th>
           <th>جمع ارزش فروش</th>
-          <th>سود بالقوه</th>
+          <th>جمع سود</th>
+          <th>جمع ارزش خرید</th>
         </tr></thead>
         <tbody>
           {% for b in brands %}
           <tr>
             <td><div class="p-name">{{ b.brand or "بدون برند" }}</div></td>
-            <td class="num">{{ fa_num(b.count) }} <small class="muted">عدد</small></td>
-            <td class="num">{{ fa_money(b.value) }}</td>
-            <td class="num">{{ fa_money(b.sale_value) }}</td>
+            <td class="num">{{ fa_num(b.units) }} <small class="muted">فقره</small></td>
+            <td class="num">{{ fa_money(b.revenue) }}</td>
             <td class="num" style="color: var({% if b.profit >= 0 %}--green{% else %}--amber{% endif %})">{{ fa_money(b.profit) }}</td>
+            <td class="num muted">{{ fa_money(b.value) }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -131,8 +133,8 @@
     {% else %}
     <div class="empty">
       <div class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.6"/></svg></div>
-      <h4>هنوز ساعتی ثبت نشده</h4>
-      <p>اولین ساعت را در انبار اضافه کنید</p>
+      <h4>هنوز فروشی ثبت نشده</h4>
+      <p>با اولین فروش، جدول برندها اینجا شکل می‌گیرد</p>
       <a class="btn btn-primary btn-sm" href="/products">افزودن ساعت</a>
     </div>
     {% endif %}
@@ -321,10 +323,17 @@
       const cAmber = styles.getPropertyValue("--amber").trim() || "#c77800";
       const cGreen = styles.getPropertyValue("--green").trim() || "#1fa64a";
       const cMuted = styles.getPropertyValue("--text-3").trim() || "#8a8d98";
+      const cPurple = styles.getPropertyValue("--purple").trim() || "#9d3fd0";
       const cRing = styles.getPropertyValue("--surface-strong").trim() || "#ffffff";
 
       const xAt = (i) => PAD_L + stepX * i;
       const yAt = (v) => H - PAD_B - (top ? (v / top) * plotH : 0);
+
+      /* مقیاس مستقل تعداد — نوار پایینی نمودار (Spec-002) */
+      const countTop = Math.max(
+        ...actual.map(m => Math.max(m.person_count || 0, m.online_count || 0)), 1);
+      const bandH = plotH * 0.18;
+      const yCountAt = (v) => H - PAD_B - (v / countTop) * bandH;
 
       /* منحنی نرم: تبدیل Catmull-Rom به Bézier مکعبی — بدون شکستگی تیز */
       const smoothPath = (pts) => {
@@ -356,6 +365,14 @@
         { key: "profit",         color: cGreen, width: 3.0, gid: "g-green", areaOp: 0.13 },
       ];
 
+      /* دو خط تعداد: حضوری و آنلاین — خط‌چین روی مقیاس پایینی */
+      const countSeries = [
+        { key: "person_count", color: cMuted },
+        { key: "online_count", color: cPurple },
+      ];
+      const countPath = (key) =>
+        smoothPath(actual.map((m, i) => ({ x: xAt(i), y: yCountAt(m[key] || 0) })));
+
       /* گرادیان محو زیر هر خط */
       const defs = `<defs>${series.map(s => `
         <linearGradient id="${s.gid}" x1="0" y1="0" x2="0" y2="1">
@@ -371,6 +388,9 @@
           series.forEach(s => {
             points += `<circle cx="${x}" cy="${yAt(m[s.key] || 0)}" r="3.2" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
           });
+          countSeries.forEach(s => {
+            points += `<circle cx="${x}" cy="${yCountAt(m[s.key] || 0)}" r="2.4" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
+          });
         }
         const isCur = i === curIdx;
         labels += `<text x="${x}" y="${H - 9}" text-anchor="middle" font-size="11" font-weight="${isCur ? 800 : 600}" fill="${isCur ? cBlue : cMuted}" opacity="${m.future ? 0.45 : 1}">${m.label}</text>`;
@@ -383,6 +403,9 @@
       const lastX = xAt(curIdx);
       series.forEach(s => {
         points += `<circle cx="${lastX}" cy="${yAt(actual[curIdx][s.key] || 0)}" r="4.8" fill="${s.color}" stroke="${cRing}" stroke-width="1.6"/>`;
+      });
+      countSeries.forEach(s => {
+        points += `<circle cx="${lastX}" cy="${yCountAt(actual[curIdx][s.key] || 0)}" r="3.6" fill="${s.color}" stroke="${cRing}" stroke-width="1.4"/>`;
       });
 
       const gridLines = [0.25, 0.5, 0.75, 1].map(f => {
@@ -400,6 +423,7 @@
           ${defs}${gridLines}${baseline}
           ${series.map(s => `<path d="${areaPath(s.key)}" fill="url(#${s.gid})"/>`).join("")}
           ${series.map(s => `<path d="${linePath(s.key)}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}
+          ${countSeries.map(s => `<path d="${countPath(s.key)}" fill="none" stroke="${s.color}" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" opacity="0.9"/>`).join("")}
           ${curLine}${hoverLine}${points}${labels}${hits}
         </svg>
         <div class="bar-tooltip"></div>`;
@@ -421,6 +445,8 @@
           `<div class="bt-row"><span>خرید</span><b style="color:var(--amber)">${faMoney(m.purchase_value)}</b></div>`,
           `<div class="bt-row"><span>سود فروش</span><b style="color:var(--green)">${faMoney(m.profit)}</b></div>`,
           m.count ? `<div class="bt-row"><span>تعداد فروش</span><b>${faNum(m.count)}</b></div>` : "",
+          m.person_count ? `<div class="bt-row"><span>فروش حضوری</span><b style="color:${cMuted}">${faNum(m.person_count)}</b></div>` : "",
+          m.online_count ? `<div class="bt-row"><span>فروش آنلاین</span><b style="color:${cPurple}">${faNum(m.online_count)}</b></div>` : "",
         ];
         tooltip.innerHTML = rows.join("");
         const rect = box.getBoundingClientRect();

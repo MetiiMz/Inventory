@@ -148,18 +148,68 @@ class ReportTests(TestCase):
     """Dashboard aggregates."""
 
     def test_dashboard_stats_shape(self):
-        make_product(purchase_price=1000, sale_price=1500, available=True)
+        make_product(purchase_price=1000, available=True)
         make_product(office_code="OF-S", website_code="WS-S",
-                     purchase_price=500, sale_price=800, available=False)
+                     purchase_price=500, available=False)
         stats = reports.get_dashboard_stats()
-        for key in ("total_purchase_value", "total_sale_value",
-                    "total_profit_value", "available_count", "product_count",
-                    "sold_count", "open_repairs", "open_tracking",
+        for key in ("total_purchase_value",
+                    "available_count", "product_count",
+                    "sold_count", "sold_revenue", "sold_profit",
+                    "open_repairs", "open_tracking",
                     "unpaid_count", "unavailable_count"):
             self.assertIn(key, stats)
+        # Spec-002: the product-projection boxes are gone
+        self.assertNotIn("total_sale_value", stats)
+        self.assertNotIn("total_profit_value", stats)
         self.assertEqual(stats["product_count"], 2)
         self.assertEqual(stats["available_count"], 1)
+        self.assertEqual(stats["total_purchase_value"], 1500)
 
+    def test_dashboard_sales_boxes_are_current_jalali_year(self):
+        # one sale this Jalali year, one in an earlier Jalali year
+        make_product(office_code="OF-DY", website_code="WS-DY")
+        make_product(office_code="OF-DO", website_code="WS-DO")
+        Sale.objects.create(
+            product=Product.objects.get(office_code="OF-DY"),
+            sale_price=1000, purchase_price=400, profit=600,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789",
+            paid_cash=1000, payment_type="cash", is_settled=True)
+        Sale.objects.create(
+            product=Product.objects.get(office_code="OF-DO"),
+            sale_price=5000, purchase_price=1000, profit=4000,
+            sale_date="2025-06-15", customer="y", customer_phone="09123456788",
+            paid_cash=5000, payment_type="cash", is_settled=True)
+        stats = reports.get_dashboard_stats()
+        self.assertEqual(stats["sold_count"], 1)
+        self.assertEqual(stats["sold_revenue"], 1000)
+        self.assertEqual(stats["sold_profit"], 600)
+
+    def test_brand_breakdown_from_sales(self):
+        p_in = make_product(brand="Rolex", purchase_price=1000, available=True)
+        p_sold_r = make_product(brand="Rolex", office_code="OF-BR",
+                                website_code="WS-BR",
+                                purchase_price=700, available=False)
+        p_sold_o = make_product(brand="Omega", office_code="OF-BO",
+                                website_code="WS-BO",
+                                purchase_price=900, available=False)
+        Sale.objects.create(
+            product=p_sold_r, sale_price=1500, purchase_price=700, profit=800,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789",
+            paid_cash=1500, payment_type="cash", is_settled=True)
+        Sale.objects.create(
+            product=p_sold_o, sale_price=2000, purchase_price=900, profit=1100,
+            sale_date=today_iso(), customer="y", customer_phone="09123456788",
+            paid_cash=2000, payment_type="cash", is_settled=True)
+        rows = reports.get_brand_breakdown()
+        by_brand = {r["brand"]: r for r in rows}
+        self.assertEqual(set(by_brand), {"Rolex", "Omega"})
+        # the still-in-stock Rolex watch must not appear in the brand table
+        self.assertEqual(by_brand["Rolex"]["units"], 1)
+        self.assertEqual(by_brand["Rolex"]["revenue"], 1500)
+        self.assertEqual(by_brand["Rolex"]["profit"], 800)
+        self.assertEqual(by_brand["Rolex"]["value"], 700)
+        self.assertEqual(by_brand["Omega"]["revenue"], 2000)
+        self.assertEqual(by_brand["Omega"]["profit"], 1100)
     def test_monthly_activity_twelve_months(self):
         months = reports.get_monthly_activity(1404)
         self.assertEqual(len(months), 12)
@@ -173,12 +223,6 @@ class ReportTests(TestCase):
         self.assertEqual(months[0]["revenue"], 0)
 
     def test_brand_breakdown_in_stock_only(self):
-        make_product(brand="Rolex", purchase_price=1000, sale_price=1500,
-                     available=True)
-        make_product(brand="Omega", office_code="OF-B2", website_code="WS-B2",
-                     purchase_price=700, sale_price=900, available=False)
-        rows = reports.get_brand_breakdown()
-        self.assertEqual([r["brand"] for r in rows], ["Rolex"])
-        self.assertEqual(rows[0]["count"], 1)
-        self.assertEqual(rows[0]["sale_value"], 1500)
-        self.assertEqual(rows[0]["profit"], 500)
+        # (Spec-002) replaced by test_brand_breakdown_from_sales: the brand
+        # table now aggregates actual Sale rows, not in-stock projections.
+        self.assertTrue(True)

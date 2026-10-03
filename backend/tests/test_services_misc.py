@@ -78,6 +78,29 @@ class CalendarServiceTests(TestCase):
         _, err = call(services.monthly_activity, "99999")
         self.assertIn("بازه", err.message)
 
+    def test_monthly_activity_sale_type_counts(self):
+        # Spec-002 (US5): the chart gains in-person/online count series
+        p = make_product(purchase_date="2026-09-01")
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2026-09-10", customer="x", customer_phone="09123456789",
+            sale_type="person", paid_cash=100, payment_type="cash")
+        Sale.objects.create(
+            product=p, sale_price=200, purchase_price=20, profit=180,
+            sale_date="2026-09-11", customer="y", customer_phone="09123456788",
+            sale_type="online", paid_cash=200, payment_type="cash")
+        _, months = services.monthly_activity("1405")
+        hit = next((m for m in months if m["person_count"] or m["online_count"]), None)
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit["person_count"], 1)
+        self.assertEqual(hit["online_count"], 1)
+        self.assertEqual(hit["count"], 2)
+        for m in months:
+            if m is hit:
+                continue
+            self.assertEqual(m["person_count"], 0)
+            self.assertEqual(m["online_count"], 0)
+
 
 class UploadServiceTests(TestCase):
     """Image uploads via multipart and JSON/base64."""

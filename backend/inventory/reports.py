@@ -14,16 +14,21 @@ from inventory.models import Payment, Product, Repair, Sale, Tracking
 def get_dashboard_stats():
     prod = Product.objects.aggregate(
         total_purchase_value=Coalesce(Sum("purchase_price"), Value(0.0), output_field=FloatField()),
-        total_sale_value=Coalesce(Sum("sale_price"), Value(0.0), output_field=FloatField()),
-        total_profit_value=Coalesce(
-            Sum(F("sale_price") - F("purchase_price")), Value(0.0), output_field=FloatField()),
         available_count=Count("id", filter=Q(available=True)),
         product_count=Count("id"),
     )
-    sales = Sale.objects.aggregate(
+    # the sales boxes aggregate actual sales of the current Jalali year
+    today = datetime.date.today()
+    jy_now, _, _ = gregorian_to_jalali(today.year, today.month, today.day)
+    gy1, gm1, gd1 = jalali_to_gregorian(jy_now, 1, 1)
+    gy2, gm2, gd2 = jalali_to_gregorian(jy_now + 1, 1, 1)
+    sales = Sale.objects.filter(
+        sale_date__gte=datetime.date(gy1, gm1, gd1).isoformat(),
+        sale_date__lt=datetime.date(gy2, gm2, gd2).isoformat(),
+    ).aggregate(
         sold_count=Count("id"),
         sold_profit=Coalesce(Sum("profit"), Value(0.0), output_field=FloatField()),
-        sold_revenue=Coalesce(Sum("final_price"), Value(0.0), output_field=FloatField()),
+        sold_revenue=Coalesce(Sum("sale_price"), Value(0.0), output_field=FloatField()),
     )
     payments = Payment.objects.filter(total_amount__gt=F("paid_amount") + 0.001).aggregate(
         cnt=Count("id"),
@@ -32,8 +37,6 @@ def get_dashboard_stats():
     )
     return {
         "total_purchase_value": prod["total_purchase_value"] or 0,
-        "total_sale_value": prod["total_sale_value"] or 0,
-        "total_profit_value": prod["total_profit_value"] or 0,
         "available_count": prod["available_count"] or 0,
         "product_count": prod["product_count"] or 0,
         "sold_count": sales["sold_count"] or 0,
@@ -73,7 +76,8 @@ def get_monthly_activity(jy=None):
         ))
 
     # سرعت: کل بازه را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
-    sales_rows = Sale.objects.values_list("sale_date", "final_price", "profit")
+    sales_rows = Sale.objects.values_list(
+        "sale_date", "sale_price", "profit", "sale_type")
     prod_rows = Product.objects.exclude(purchase_date="").values_list("purchase_date", "purchase_price")
 
     def month_of(iso):
@@ -82,14 +86,18 @@ def get_monthly_activity(jy=None):
         return gregorian_to_jalali(y, m, d)[:2]
 
     sales_by_month = {}
-    for sdate, final_price, profit in sales_rows:
+    for sdate, sale_price, profit, sale_type in sales_rows:
         if not sdate:
             continue
         key = month_of(sdate)
-        agg = sales_by_month.setdefault(key, [0.0, 0.0, 0])
-        agg[0] += final_price or 0
+        agg = sales_by_month.setdefault(key, [0.0, 0.0, 0, 0, 0])
+        agg[0] += sale_price or 0
         agg[1] += profit or 0
         agg[2] += 1
+        if sale_type == "person":
+            agg[3] += 1
+        elif sale_type == "online":
+            agg[4] += 1
 
     prod_by_month = {}
     for pdate, pprice in prod_rows:
@@ -98,7 +106,7 @@ def get_monthly_activity(jy=None):
 
     out = []
     for (jy, jm), start, end in ranges:
-        s = sales_by_month.get((jy, jm), [0.0, 0.0, 0])
+        s = sales_by_month.get((jy, jm), [0.0, 0.0, 0, 0, 0])
         future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
         out.append({
             "jy": jy, "jm": jm,
@@ -106,6 +114,8 @@ def get_monthly_activity(jy=None):
             "revenue": 0 if future else s[0],
             "profit": 0 if future else s[1],
             "count": 0 if future else s[2],
+            "person_count": 0 if future else s[3],
+            "online_count": 0 if future else s[4],
             "purchase_value": 0 if future else prod_by_month.get((jy, jm), 0.0),
             "future": future,
         })
@@ -113,27 +123,24 @@ def get_monthly_activity(jy=None):
 
 
 def get_brand_breakdown():
-    """انبار موجود (ساعت‌های در انبار) به تفکیک برند.
+    """فروش‌های ثبت‌شده به تفکیک برند (شامل ساعت‌های فروخته‌شده).
 
-    برای هر برند: تعداد ساعت‌های موجود، ارزش خرید، ارزش فروش و
-    سود بالقوه (فروش − خرید) اگر همه‌ی موجودی به قیمت فروش فروخته شود.
-    ساعت‌های فروخته‌شده (available=False) لحاظ نمی‌شوند.
+    برای هر برند: تعداد فروش، جمع ارزش فروش (قیمت‌های ثبت‌شده در
+    زمان فروش)، جمع سود و جمع ارزش خرید.
     """
     rows = (
-        Product.objects.filter(available=True)
-        .values("brand")
+        Sale.objects.select_related("product")
+        .values("product__brand")
         .annotate(
-            count=Count("id"),
+            units=Count("id"),
+            revenue=Coalesce(Sum("sale_price"), Value(0.0), output_field=FloatField()),
+            profit=Coalesce(Sum("profit"), Value(0.0), output_field=FloatField()),
             value=Coalesce(Sum("purchase_price"), Value(0.0), output_field=FloatField()),
-            sale_value=Coalesce(Sum("sale_price"), Value(0.0), output_field=FloatField()),
-            profit=Coalesce(
-                Sum(F("sale_price") - F("purchase_price")), Value(0.0), output_field=FloatField()),
         )
-        .order_by("-value")
+        .order_by("-revenue")
     )
     return [
-        {"brand": r["brand"], "count": r["count"],
-         "value": r["value"], "sale_value": r["sale_value"],
-         "profit": r["profit"]}
+        {"brand": r["product__brand"] or "", "units": r["units"],
+         "revenue": r["revenue"], "profit": r["profit"], "value": r["value"]}
         for r in rows
     ]
