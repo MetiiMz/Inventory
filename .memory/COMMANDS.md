@@ -3,6 +3,27 @@
 > Persistent log of every shell command executed on this project (user request, 2026-09-03).
 > Newest first. Grouped by task. Paths abbreviated as `<root>` = `/media/MyShit/Works/Tick O Time/DB/Watch Inventory`.
 
+## 2026-10-03 — Step 3: split services.py into the 11-module services/ package
+```bash
+# T029: clear stale dir + back up before deleting
+rm -rf inventory/api/services/                 # stale __pycache__ only (0 tracked files)
+cp inventory/api/services.py /tmp/service_before.py   # kept for the diff gate
+# split: generator extracts each top-level fn/class/const VERBATIM (ast.get_source_segment),
+#   computes per-module imports, writes 11 modules + re-exporting __init__.py (54 names + __all__)
+python3 /tmp/split_services.py
+# diff-based verification (user-required): byte-identity of every moved top-level node + no undefined names
+python3 /tmp/verify_split.py                    # 64/64 byte-identical; no undefined names; VERDICT PASS
+git rm inventory/api/services.py                # T036
+export DJANGO_SETTINGS_MODULE=tikotime.settings
+.venv/bin/python -c "import django; django.setup(); from inventory.api import services; print(services.__file__)"
+.venv/bin/python -c "import django; django.setup(); from inventory.api.services import ApiError, product_queryset, _parse_iso_or_raise"
+.venv/bin/python manage.py check                # no issues
+find inventory/api/services -name '*.py' -exec wc -l {} + | sort -n | tail -1   # sales.py 277 (<=400)
+git add -A && git --no-pager diff --cached --name-status   # D services.py + A 11 modules; zero caller changes
+.venv/bin/python manage.py test 2>&1 | tail -4   # Found 153 test(s) + OK
+git commit -m 'refactor(api): split services.py into the 11-module domain services/ package'   # 059c3a9
+```
+
 ## 2026-10-03 — Step 2: drop gunicorn/whitenoise; static independent of DEBUG
 ```bash
 # requirements.txt: -gunicorn -whitenoise   -> 3 lines (Django, Jinja2, openpyxl)

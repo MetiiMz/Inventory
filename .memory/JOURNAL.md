@@ -2,6 +2,14 @@
 
 > Commit-style activity log. Newest entries first. One entry per meaningful action.
 
+## 2026-10-03 — Step 3: services.py split into the 11-module domain package (`059c3a9`)
+
+- **Split:** `inventory/api/services.py` (1198 lines) → `inventory/api/services/` package with 11 modules — `common` (`ApiError` + `_clean_ids`/`_merge_partial`/`_parse_iso_or_raise`), `products`, `sales`, `payments`, `repairs`, `tracking`, `settings`, `uploads`, `calendar`, `reports`, `export_import`; then `git rm` the old single file. Largest module = `sales.py` (277 lines) ≤ 400.
+- **Re-export root:** `services/__init__.py` re-exports all **54** frozen public names (incl. `ApiError` + the `_`-helpers) with `__all__` and the layout docstring; each domain module does `from .common import …` (no circular imports). Each module imports only what it uses; the 9 local in-function imports (`product_dict`, `excel_io`, `today_jalali`, …) stay inside their functions.
+- **Method:** a generator script extracted every top-level function/class/const **verbatim** via `ast.get_source_segment`, computed per-module imports, and wrote the files — so function bodies are byte-identical by construction.
+- **Verification (diff-based, per user request):** before deleting, `cp services.py /tmp/service_before.py`; then compared `ast.get_source_segment` of all **64** top-level nodes between backup and new modules → **64/64 byte-identical** (no diff/missing/extra); a second AST pass found **no undefined names** in any module.
+- **Gate green:** import under `django.setup()` → `services.__file__` = `__init__.py`, `create_sale`→`services.sales`, `ApiError`→`services.common`, 8 names direct-import OK; `check` clean; `git diff --stat` = only the 11 new modules + deleted `services.py` (**zero** caller/template/static changes, SC-007); `Found 153 test(s)` + `OK`.
+
 ## 2026-10-03 — Step 2: gunicorn/whitenoise dropped; static served independent of DEBUG (`76c7a2b`)
 
 - **Production tooling removed:** `gunicorn` + `whitenoise` out of `requirements.txt` (now 3 lines: Django/Jinja2/openpyxl); `WhiteNoiseMiddleware` out of `MIDDLEWARE`; `STORAGES` + `WHITENOISE_MAX_AGE` removed; `staticfiles/` dir removed and dropped from `.gitignore`.
