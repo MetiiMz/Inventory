@@ -178,11 +178,23 @@ def sale_dict(r, product=None):
     }
     d["paid_total_display"] = fa_money(d["paid_total"])
     d["paid_breakdown_fa"] = " + ".join(filter(None, [
-        f"نقدی {fa_money(d['paid_cash'])}" if d["paid_cash"] else "",
-        f"کارت‌خوان {fa_money(d['paid_pos'])}" if d["paid_pos"] else "",
-        f"کارت به کارت {fa_money(d['paid_card2card'])}" if d["paid_card2card"] else "",
+        "نقدی" if d["paid_cash"] else "",
+        "کارت‌خوان" if d["paid_pos"] else "",
+        "کارت به کارت" if d["paid_card2card"] else "",
     ]))
     d["purchase_price_display"] = fa_money(r.purchase_price)
+    # ریز بیعانه: سند پرداخت مرتبط (یک سند به‌ازای هر فروش بیعانه‌ای)
+    pay = r.payments.first() if r.payment_type == "deposit" else None
+    dep_total = pay.total_amount if pay else None
+    dep_paid = pay.paid_amount if pay else None
+    dep_remaining = max(0.0, (dep_total or 0) - (dep_paid or 0)) if pay else None
+    d["deposit_total_amount"] = dep_total
+    d["deposit_paid_amount"] = dep_paid
+    d["deposit_remaining"] = dep_remaining
+    d["deposit_total_amount_display"] = fa_money(dep_total)
+    d["deposit_paid_amount_display"] = fa_money(dep_paid)
+    d["deposit_remaining_display"] = fa_money(dep_remaining)
+    d["deposit_settled_at_fa"] = fa_date(pay.settled_at) if (pay and pay.settled_at) else ""
     d["invoice_code"] = r.invoice_code or invoice_code(r.id, r.sale_date)
     return d
 

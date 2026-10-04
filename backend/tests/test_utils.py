@@ -105,6 +105,64 @@ class SalePaymentDictTests(TestCase):
         self.assertIn("نقدی", d["paid_breakdown_fa"])
         self.assertEqual(d["payment_type_fa"], "بیعانه")
         self.assertEqual(d["product_name"], p.name)
+        # no Payment receipt row exists here — deposit fields degrade to None
+        for key in ("deposit_total_amount", "deposit_paid_amount",
+                    "deposit_remaining"):
+            self.assertIsNone(d[key])
+        self.assertEqual(d["deposit_settled_at_fa"], "")
+
+    def test_sale_dict_deposit_payment_fields_partial(self):
+        p = make_product()
+        s = Sale.objects.create(
+            product=p, sale_price=1500, purchase_price=1000, profit=500,
+            sale_date=today_iso(), customer="علی", customer_phone="09123456789",
+            paid_cash=400, paid_pos=0, paid_card2card=0,
+            payment_type="deposit", is_settled=False, invoice_code="")
+        Payment.objects.create(
+            sale=s, product=p, product_name=p.name,
+            customer_name="علی", customer_phone="09123456789",
+            total_amount=1500, paid_amount=400, pay_date=today_iso())
+        d = utils.sale_dict(s, p)
+        self.assertEqual(d["deposit_total_amount"], 1500)
+        self.assertEqual(d["deposit_paid_amount"], 400)
+        self.assertEqual(d["deposit_remaining"], 1100)
+        self.assertEqual(d["deposit_total_amount_display"], utils.fa_money(1500))
+        self.assertEqual(d["deposit_paid_amount_display"], utils.fa_money(400))
+        self.assertEqual(d["deposit_remaining_display"], utils.fa_money(1100))
+        self.assertEqual(d["deposit_settled_at_fa"], "")
+
+    def test_sale_dict_deposit_payment_fields_settled(self):
+        p = make_product()
+        s = Sale.objects.create(
+            product=p, sale_price=1000, purchase_price=800, profit=200,
+            sale_date=today_iso(), customer="مریم", customer_phone="09123456789",
+            paid_cash=500, paid_pos=0, paid_card2card=0,
+            payment_type="deposit", is_settled=True, settled_at=today_iso(),
+            invoice_code="")
+        Payment.objects.create(
+            sale=s, product=p, product_name=p.name,
+            customer_name="مریم", customer_phone="09123456789",
+            total_amount=1000, paid_amount=1000, pay_date=today_iso(),
+            settled_at=today_iso())
+        d = utils.sale_dict(s, p)
+        # fully paid: remaining is floored at zero
+        self.assertEqual(d["deposit_total_amount"], 1000)
+        self.assertEqual(d["deposit_paid_amount"], 1000)
+        self.assertEqual(d["deposit_remaining"], 0)
+        self.assertEqual(d["deposit_settled_at_fa"], utils.fa_date(today_iso()))
+
+    def test_sale_dict_cash_sale_deposit_fields_null(self):
+        p = make_product()
+        s = Sale.objects.create(
+            product=p, sale_price=1500, purchase_price=1000, profit=500,
+            sale_date=today_iso(), customer="علی", customer_phone="09123456789",
+            paid_cash=1500, paid_pos=0, paid_card2card=0,
+            payment_type="cash", is_settled=True, invoice_code="")
+        d = utils.sale_dict(s, p)
+        for key in ("deposit_total_amount", "deposit_paid_amount",
+                    "deposit_remaining"):
+            self.assertIsNone(d[key])
+        self.assertEqual(d["deposit_settled_at_fa"], "")
 
     def test_sale_dict_deleted_product_degrades(self):
         # Sale.product is NOT NULL — use a detached instance to simulate

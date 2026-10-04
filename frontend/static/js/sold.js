@@ -202,6 +202,8 @@ function showSaleDetail(s) {
   add("روش پرداخت", `<span class="badge ${pColor} plain">${pLabel}</span>`);
   if (s.paid_breakdown_fa) add("ریز پرداخت", s.paid_breakdown_fa);
   if (s.payment_type === "deposit") {
+    add("پرداخت‌شده تاکنون", `${s.deposit_paid_amount_display} تومان`);
+    if (s.deposit_remaining > 0) add("مانده", `${s.deposit_remaining_display} تومان`);
     add("وضعیت تسویه", s.is_settled
       ? `<span class="badge green plain">تسویه شده${s.settled_at_fa ? " — " + s.settled_at_fa : ""}</span>`
       : '<span class="badge amber plain">در انتظار تسویه</span>');
