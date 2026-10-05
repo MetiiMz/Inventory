@@ -15,6 +15,9 @@ let editingSupplierId = null;
 let deletingInvoiceId = null;
 let deletingInvoiceSupplierId = null;
 let deletingSupplierId = null;
+let supplierQuery = "";  // جستجوی نام تأمین‌کننده
+let dateFrom = "";       // فیلتر تاریخ فاکتور — از (شمسی/میلادی)
+let dateTo = "";         // فیلتر تاریخ فاکتور — تا
 
 const IMG_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m5 19 5.2-5.4a1.6 1.6 0 0 1 2.3 0L19 19"/></svg>';
 const PEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5.5 4 4L8 20H4v-4z"/><path d="m12.5 7.5 4 4"/></svg>';
@@ -39,7 +42,10 @@ function supplierById(id) {
 
 async function ensureInvoices(supplierId) {
   if (invoiceCache[supplierId]) return;
-  const data = await api(`/api/ledger/invoices?supplier_id=${supplierId}`);
+  let url = `/api/ledger/invoices?supplier_id=${supplierId}`;
+  if (dateFrom) url += `&date_from=${encodeURIComponent(dateFrom)}`;
+  if (dateTo) url += `&date_to=${encodeURIComponent(dateTo)}`;
+  const data = await api(url);
   invoiceCache[supplierId] = data.items;
 }
 
@@ -72,7 +78,14 @@ function renderSuppliers() {
     return;
   }
   empty.classList.add("hidden");
-  list.innerHTML = ledgerSuppliers.map((s) => {
+  const q = supplierQuery.trim().toLowerCase();
+  const visible = ledgerSuppliers.filter(
+    (s) => !q || s.name.trim().toLowerCase().includes(q));
+  if (!visible.length) {
+    list.innerHTML = '<div class="li-sub ledger-no-match">تأمین‌کننده‌ای با این نام پیدا نشد</div>';
+    return;
+  }
+  list.innerHTML = visible.map((s) => {
     const open = s.id === openSupplierId;
     const rows = invoiceCache[s.id] || [];
     return `
@@ -93,7 +106,9 @@ function renderSuppliers() {
           فاکتور جدید
         </button>
         ${rows.map(invoiceRowHtml).join("")
-          || '<div class="li-sub" style="padding:8px 4px">فاکتوری برای این تأمین‌کننده ثبت نشده</div>'}
+          || (dateFrom || dateTo
+              ? '<div class="li-sub" style="padding:8px 4px">فاکتوری در بازه‌ی تاریخ انتخابی ثبت نشده</div>'
+              : '<div class="li-sub" style="padding:8px 4px">فاکتوری برای این تأمین‌کننده ثبت نشده</div>')}
       </div>` : ""}
     </div>`;
   }).join("");
@@ -317,11 +332,12 @@ function readLines(tbody) {
 
 function openInvoiceModal(supplierId) {
   const s = supplierById(supplierId);
-  newInvoicePhotos = [];
+  /* پرکشیِ در‌جا: آرایه‌ها در bindPhotoAdd/Tools به‌صورت مرجع گرفته شده‌اند */
+  newInvoicePhotos.length = 0;
   detailDateChanged = false;
   $("#invoice-supplier-id").value = supplierId;
   $("#invoice-modal-title").textContent = `فاکتور جدید — ${s ? s.name : ""}`;
-  $("#invoice-date").value = $("#invoice-date").dataset.jalaliToday || "";
+  $("#invoice-date").value = todayJalaliStr();
   renderPhotos($("#invoice-photo-items"), newInvoicePhotos);
   const tbody = $("#invoice-lines-body");
   tbody.innerHTML = "";
@@ -361,6 +377,7 @@ $("#btn-save-invoice").addEventListener("click", async () => {
     });
     toast("فاکتور ثبت شد");
     closeModal("modal-invoice");
+    delete invoiceCache[supplierId];
     await loadSuppliers();
     openSupplierId = supplierId;
     await ensureInvoices(supplierId);
@@ -396,13 +413,15 @@ function detailLineRowHtml(line, i) {
 async function openInvoiceDetail(invoiceId) {
   let data;
   try {
-    data = await api(`/api/ledger/invoices/${invoiceId}`);
+    data = (await api(`/api/ledger/invoices/${invoiceId}`)).invoice;
   } catch (err) {
     toast(err.message, "error");
     return;
   }
   detailData = data;
-  detailPhotos = [...(data.images || [])];
+  /* پرکشیِ در‌جا: bindPhotoAdd/Tools به آرایه‌ی اولیه اشاره دارند */
+  detailPhotos.length = 0;
+  detailPhotos.push(...(data.images || []));
   detailDateChanged = false;
 
   $("#detail-invoice-id").value = data.id;
@@ -416,7 +435,7 @@ async function openInvoiceDetail(invoiceId) {
   tbody.innerHTML = data.lines.map(detailLineRowHtml).join("");
 
   renderPhotos($("#detail-photo-items"), detailPhotos);
-  $("#detail-add-line").classList.toggle("hidden", data.lines.length >= 50);
+  $("#btn-detail-add-line").classList.toggle("hidden", data.lines.length >= 50);
   lineRowTotals(tbody);
   updateDetailTotals();
 
@@ -441,7 +460,7 @@ $("#btn-detail-add-line").addEventListener("click", () => {
   const tbody = $("#detail-lines-body");
   if (tbody.querySelectorAll("tr").length >= 50) return;
   addLineRow(tbody);
-  $("#detail-add-line").classList.toggle("hidden", tbody.querySelectorAll("tr").length >= 50);
+  $("#btn-detail-add-line").classList.toggle("hidden", tbody.querySelectorAll("tr").length >= 50);
   lineRowTotals(tbody);
   updateDetailTotals();
 });
@@ -468,7 +487,7 @@ detailBody.addEventListener("click", (e) => {
   btn.closest("tr").remove();
   lineRowTotals(detailBody);
   updateDetailTotals();
-  $("#detail-add-line").classList.toggle("hidden", detailBody.querySelectorAll("tr").length >= 50);
+  $("#btn-detail-add-line").classList.toggle("hidden", detailBody.querySelectorAll("tr").length >= 50);
 });
 
 $("#btn-save-detail").addEventListener("click", async () => {
@@ -507,6 +526,36 @@ $("#btn-save-detail").addEventListener("click", async () => {
     btn.disabled = false;
   }
 });
+
+/* ------------------------------------------------ جستجو و فیلتر تاریخ */
+
+$("#supplier-search").addEventListener("input", (e) => {
+  supplierQuery = e.target.value;
+  renderSuppliers();
+});
+
+function refreshWithFilters() {
+  /* تاریخِ فیلتر عوض شد؛ کشِ فاکتورها را خالی کن و تازه بیاور */
+  for (const k of Object.keys(invoiceCache)) delete invoiceCache[k];
+  loadSuppliers().then(async () => {
+    if (openSupplierId != null) {
+      try { await ensureInvoices(openSupplierId); } catch (err) { openSupplierId = null; }
+      renderSuppliers();
+    }
+  });
+}
+
+$("#filter-date-from").addEventListener("change", (e) => { dateFrom = e.target.value.trim(); refreshWithFilters(); });
+$("#filter-date-to").addEventListener("change", (e) => { dateTo = e.target.value.trim(); refreshWithFilters(); });
+
+$("#filter-reset").addEventListener("click", () => {
+  supplierQuery = ""; dateFrom = ""; dateTo = "";
+  $("#supplier-search").value = "";
+  $("#filter-date-from").value = "";
+  $("#filter-date-to").value = "";
+  refreshWithFilters();
+});
+
 loadSuppliers();
 
 /* --------------------------------------------------- حذف‌ها */

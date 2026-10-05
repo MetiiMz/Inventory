@@ -1262,6 +1262,18 @@ tr.row-highlight {
    حساب معین — بایگانی فاکتورهای خرید (accordion)
    ============================================================ */
 
+.ledger-filter {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px; margin-bottom: 14px;
+}
+.ledger-filter-search { flex: 1 1 220px; min-width: 180px; }
+.ledger-filter-dates { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ledger-filter-dates label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px; color: var(--muted, #666);
+}
+.ledger-filter-dates input { width: 150px; text-align: center; direction: ltr; }
+
 .ledger-card { padding: 8px; }
 
 .ledger-supplier { border-radius: 14px; overflow: hidden; }

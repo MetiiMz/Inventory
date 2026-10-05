@@ -14,6 +14,23 @@
   </div>
 </header>
 
+<!-- جستجو و فیلتر: نام تأمین‌کننده + بازه‌ی تاریخ فاکتور -->
+<div class="glass card ledger-filter">
+  <input class="input ledger-filter-search" id="supplier-search" type="search"
+    placeholder="جستجوی تأمین‌کننده…" autocomplete="off">
+  <div class="ledger-filter-dates">
+    <label>از تاریخ
+      <input class="input" id="filter-date-from" type="text" data-datepicker
+        placeholder="۱۴۰۳/۰۱/۰۱" inputmode="numeric">
+    </label>
+    <label>تا تاریخ
+      <input class="input" id="filter-date-to" type="text" data-datepicker
+        placeholder="۱۴۰۳/۱۲/۲۹" inputmode="numeric">
+    </label>
+  </div>
+  <button class="btn btn-sm" id="filter-reset" type="button">پاک کردن فیلترها</button>
+</div>
+
 <!-- آکاردئون تأمین‌کننده‌ها — فقط با جاوااسکریپت پر می‌شود -->
 <section class="glass card ledger-card" id="ledger-list"></section>
 
@@ -59,7 +76,7 @@
       <input type="hidden" id="invoice-supplier-id">
       <div class="field mb-14">
         <label>تاریخ خرید</label>
-        <input class="input" id="invoice-date" type="text" data-jalali-today inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
+        <input class="input" id="invoice-date" type="text" data-datepicker data-jalali-today inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
       </div>
       <div class="field mb-14">
         <label>عکس فاکتور (هر صفحه یک عکس — اختیاری)</label>
@@ -111,7 +128,7 @@
       <div class="li-sub" style="margin:0 0 4px">تأمین‌کننده: <b id="detail-supplier-name"></b></div>
       <div class="field mb-14">
         <label>تاریخ خرید</label>
-        <input class="input" id="detail-date" type="text" inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
+        <input class="input" id="detail-date" type="text" data-datepicker inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
       </div>
       <div class="field mb-14">
         <label>عکس فاکتور (هر صفحه یک عکس)</label>
