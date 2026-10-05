@@ -10,6 +10,6 @@ every JSON endpoint lives in ``inventory.api``:
   of truth for validation and transactional writes).
 """
 from .pages import (  # noqa: F401
-    calendar_page, dashboard, handler404, index, payments_page,
+    calendar_page, dashboard, handler404, index, ledger_page, payments_page,
     products_page, repairs_page, settings_page, sold_page, tracking_page,
 )

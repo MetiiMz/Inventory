@@ -97,6 +97,11 @@ def payments_page(request):
     return render(request, "payments.html", page_ctx(request, "payments"))
 
 
+def ledger_page(request):
+    """Supplier ledger page shell (حساب معین)."""
+    return render(request, "ledger.html", page_ctx(request, "ledger"))
+
+
 def settings_page(request):
     """Settings page shell."""
     return render(request, "settings.html", page_ctx(request, "settings"))
