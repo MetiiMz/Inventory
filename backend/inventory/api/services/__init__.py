@@ -18,7 +18,7 @@ adapter layer only decides *how* to serialize the result.
 
 Split into one module per domain; this package re-exports the full public
 surface so callers keep using ``inventory.api.services`` unchanged.
-Modules: common, products, sales, payments, repairs, tracking, settings, uploads, calendar, reports, export_import."""
+Modules: common, products, sales, payments, repairs, tracking, settings, uploads, calendar, reports, export_import, ledger."""
 
 from .common import (
     ApiError, _clean_ids, _merge_partial, _parse_iso_or_raise,
@@ -53,6 +53,11 @@ from .reports import monthly_activity
 from .export_import import (
     _export_funcs, export_data_file, import_products_file, import_template_file,
 )
+from .ledger import (
+    ledger_suppliers_list, ledger_supplier_or_404, ledger_invoices_list,
+    ledger_invoice_or_404, create_supplier, rename_supplier, delete_supplier,
+    create_invoice, update_invoice, delete_invoice,
+)
 
 __all__ = [
     'ApiError', '_clean_ids', '_merge_partial', '_parse_iso_or_raise', 'product_queryset', '_product_values',
@@ -64,4 +69,6 @@ __all__ = [
     'delete_tracking', 'bulk_delete_tracking', 'brands_list', 'brands_add', 'brands_delete', 'site_settings',
     'save_settings', 'set_site_icon', '_save_uploaded', 'save_upload', '_repair_cell', 'calendar_month',
     'calendar_day', 'monthly_activity', '_export_funcs', 'export_data_file', 'import_products_file', 'import_template_file',
+    'ledger_suppliers_list', 'ledger_supplier_or_404', 'ledger_invoices_list', 'ledger_invoice_or_404',
+    'create_supplier', 'rename_supplier', 'delete_supplier', 'create_invoice', 'update_invoice', 'delete_invoice',
 ]
