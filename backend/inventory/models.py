@@ -124,3 +124,62 @@ class Tracking(models.Model):
     class Meta:
         db_table = "tracking"
         indexes = [models.Index(fields=["status", "-id"])]
+
+
+# ------------------------------------------------------------- ledger (حساب معین)
+# بایگانی فاکتورهای خرید از تأمین‌کننده‌ها — زیرسامانه‌ی کاملاً مستقل:
+# هیچ کلید بیرونی به Product/Sale/Payment/Repair/Tracking/Setting ندارد.
+class LedgerSupplier(models.Model):
+    """تأمین‌کننده (شخص یا شرکت) در بایگانی خرید."""
+    name = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ledger_suppliers"
+        indexes = [models.Index(fields=["name"])]
+
+
+class LedgerInvoice(models.Model):
+    """فاکتور کاغذی خرید — نام نمایشی = تاریخ خرید (ISO)."""
+    supplier = models.ForeignKey(
+        LedgerSupplier, on_delete=models.CASCADE, related_name="invoices",
+        db_index=True,
+    )
+    purchase_date = models.CharField(max_length=10, default="", blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ledger_invoices"
+        indexes = [models.Index(fields=["supplier_id", "-id"])]
+
+
+class LedgerLineItem(models.Model):
+    """یک خط فاکتور خرید — نام/رفرنس ساعت؛ مجموع‌ها هرگز ذخیره نمی‌شوند."""
+    invoice = models.ForeignKey(
+        LedgerInvoice, on_delete=models.CASCADE, related_name="lines",
+        db_index=True,
+    )
+    watch_name = models.CharField(max_length=200)
+    reference = models.CharField(max_length=100, default="", blank=True)
+    quantity = models.IntegerField(default=1)
+    unit_price = models.FloatField(default=0)
+
+    class Meta:
+        db_table = "ledger_lines"
+        indexes = [models.Index(fields=["invoice_id", "id"])]
+
+
+class LedgerInvoiceImage(models.Model):
+    """عکسِ یک صفحه‌ی فاکتور — ترتیب نمایش (= شماره‌ی صفحه) در order."""
+    invoice = models.ForeignKey(
+        LedgerInvoice, on_delete=models.CASCADE, related_name="images",
+        db_index=True,
+    )
+    filename = models.CharField(max_length=255, default="", blank=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ledger_invoice_images"
+        indexes = [models.Index(fields=["invoice_id", "order"])]
