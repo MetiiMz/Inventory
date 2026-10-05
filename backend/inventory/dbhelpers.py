@@ -110,7 +110,11 @@ def delete_backup(filename):
 
 
 # ---------------------------------------------------------------- clear database
-_CLEAR_TABLES = ("payments", "sales", "products", "repairs", "tracking")
+_CLEAR_TABLES = (
+    "payments", "sales", "products", "repairs", "tracking",
+    "ledger_suppliers", "ledger_invoices", "ledger_lines",
+    "ledger_invoice_images",
+)
 
 
 def count_records():
@@ -160,8 +164,9 @@ def clear_database():
     """پاک‌سازی کامل داده‌های دوره برای شروع سال جدید.
 
     اول به‌صورت خودکار از وضعیت فعلی پشتیبان گرفته می‌شود
-    (pre_clear_...)، بعد ساعت‌ها، فروش‌ها، پرداخت‌ها، تعمیرات و
-    پیگیری‌ها در یک تراکنش حذف می‌شوند؛ شمارنده‌ی id ها صفر می‌شود
+    (pre_clear_...)، بعد ساعت‌ها، فروش‌ها، پرداخت‌ها، تعمیرات،
+    پیگیری‌ها و بایگانی خرید (حساب معین) در یک تراکنش حذف
+    می‌شوند؛ شمارنده‌ی id ها صفر می‌شود
     (شماره‌گذاری از ۱ شروع می‌شود) و فایل VACUUM می‌شود.
     تنظیمات فروشگاه، برندها و آیکون سایت دست‌نخورده می‌مانند.
     تصاویر یتیم‌شده‌ی دوره هم حذف می‌شوند، به‌جز آیکون سایت.
@@ -184,7 +189,8 @@ def clear_database():
         # سال تازه، شماره‌های تازه — id از ۱ شروع شود
         try:
             cur.execute(
-                "DELETE FROM sqlite_sequence WHERE name IN (?, ?, ?, ?, ?)",
+                "DELETE FROM sqlite_sequence WHERE name IN ("
+                + ", ".join(["?"] * len(_CLEAR_TABLES)) + ")",
                 _CLEAR_TABLES)
         except sqlite3.Error:
             pass  # sqlite_sequence هنوز وجود ندارد
