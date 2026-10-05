@@ -50,9 +50,12 @@ def api_ledger_invoices(request):
         supplier_id = str(request.GET.get("supplier_id") or "").strip()
         if not supplier_id:
             return _fail("یافت نشد", 404)
+        date_from = str(request.GET.get("date_from") or "").strip()
+        date_to = str(request.GET.get("date_to") or "").strip()
         return _guard(lambda: _ok(items=[
             ledger_invoice_dict(i)
-            for i in services.ledger_invoices_list(supplier_id)]))
+            for i in services.ledger_invoices_list(
+                supplier_id, date_from, date_to)]))
     return _bad_method()
 
 

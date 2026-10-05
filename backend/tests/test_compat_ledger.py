@@ -195,6 +195,41 @@ class LedgerReadCompatTests(TestCase):
         self.assertEqual(r.status_code, 404)
         self.assertEqual(r.json()["error"], "یافت نشد")
 
+    def test_invoice_list_date_range_filters(self):
+        for d in ("2026-06-20", "2026-06-25", "2026-07-05"):
+            self._invoice(self.s1, d, lines=[{"watch_name": "A", "unit_price": "1"}])
+        r = self.client.get(
+            f"/api/ledger/invoices?supplier_id={self.s1}"
+            "&date_from=2026-06-21&date_to=2026-07-01")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            [i["purchase_date"] for i in r.json()["items"]], ["2026-06-25"])
+
+    def test_invoice_list_date_range_accepts_jalali(self):
+        self._invoice(self.s1, "2026-06-20", lines=[{"watch_name": "A", "unit_price": "1"}])
+        self._invoice(self.s1, "2026-06-21", lines=[{"watch_name": "B", "unit_price": "1"}])
+        r = self.client.get(
+            f"/api/ledger/invoices?supplier_id={self.s1}&date_from=1405/03/31")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            [i["purchase_date"] for i in r.json()["items"]], ["2026-06-21"])
+
+    def test_invoice_list_date_range_without_dates_unfiltered(self):
+        self._invoice(self.s1, "2026-06-20", lines=[{"watch_name": "A", "unit_price": "1"}])
+        r = self.client.get(
+            f"/api/ledger/invoices?supplier_id={self.s1}&date_from=&date_to=")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.json()["items"]), 1)
+
+    def test_invoice_list_invalid_filter_date_400(self):
+        r = self.client.get(
+            f"/api/ledger/invoices?supplier_id={self.s1}&date_from=xx")
+        self.assertEqual(r.status_code, 400)
+        body = r.json()
+        self.assertFalse(body["ok"])
+        self.assertEqual(body["error"], "تاریخ معتبر نیست")
+        self.assertNotIn("detail", body)
+
 
 class LedgerUpdateCompatTests(TestCase):
     """PUT /api/ledger/invoices/<id> — full-replace edit envelopes."""

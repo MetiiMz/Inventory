@@ -138,6 +138,51 @@ class LedgerInvoiceCreateServiceTests(TestCase):
         self.assertEqual(d["lines"][0]["line_total"], 6000000.0)
 
 
+class LedgerInvoiceListServiceTests(TestCase):
+    """Invoice list with the optional purchase-date range filter."""
+
+    def setUp(self):
+        self.supplier, _ = call(services.create_supplier, {"name": "تست"})
+        for d in ("2026-06-20", "2026-06-21", "2026-07-01"):
+            call(services.create_invoice, {
+                "supplier_id": self.supplier.id, "purchase_date": d})
+
+    def test_all_invoices_newest_first(self):
+        rows, err = call(services.ledger_invoices_list, self.supplier.id)
+        self.assertIsNone(err)
+        self.assertEqual([r.purchase_date for r in rows],
+                         ["2026-07-01", "2026-06-21", "2026-06-20"])
+
+    def test_inclusive_date_range(self):
+        rows, err = call(services.ledger_invoices_list, self.supplier.id,
+                         "2026-06-21", "2026-07-01")
+        self.assertIsNone(err)
+        self.assertEqual([r.purchase_date for r in rows],
+                         ["2026-07-01", "2026-06-21"])
+
+    def test_jalali_input_normalized_to_iso(self):
+        rows, err = call(services.ledger_invoices_list, self.supplier.id,
+                         "1405/03/31")  # = 2026-06-21
+        self.assertIsNone(err)
+        self.assertEqual([r.purchase_date for r in rows],
+                         ["2026-07-01", "2026-06-21"])
+
+    def test_empty_result_when_from_after_to(self):
+        rows, err = call(services.ledger_invoices_list, self.supplier.id,
+                         "2026-07-02", "2026-06-20")
+        self.assertIsNone(err)
+        self.assertEqual(list(rows), [])
+
+    def test_unknown_supplier_still_404_with_filters(self):
+        _, err = call(services.ledger_invoices_list, 999999, "2026-01-01")
+        self.assertEqual(err.status_code, 404)
+
+    def test_invalid_date_rejected(self):
+        _, err = call(services.ledger_invoices_list, self.supplier.id, "xx")
+        self.assertEqual(err.status_code, 400)
+        self.assertEqual(err.message, "تاریخ معتبر نیست")
+
+
 class LedgerUpdateServiceTests(TestCase):
     """PUT semantics: omitted keys keep their values; present keys are
     fully replaced (lines / images), date is swapped."""

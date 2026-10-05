@@ -31,14 +31,21 @@ def ledger_supplier_or_404(supplier_id):
     return supplier
 
 
-def ledger_invoices_list(supplier_id):
+def ledger_invoices_list(supplier_id, date_from=None, date_to=None):
     """Invoice rows for one supplier (404 ``یافت نشد`` for an unknown one).
 
     Ordered purchase_date desc, then id desc — newest invoices first.
+    ``date_from`` / ``date_to`` optionally restrict the purchase date to an
+    inclusive range (Jalali or ISO input, stored as ISO).
     """
     supplier = ledger_supplier_or_404(supplier_id)
-    return LedgerInvoice.objects.filter(supplier=supplier)\
-        .order_by("-purchase_date", "-id")
+    qs = LedgerInvoice.objects.filter(supplier=supplier)
+    for value, look in ((date_from, "gte"), (date_to, "lte")):
+        text = clean(str(value or ""))
+        if text:
+            qs = qs.filter(**{
+                f"purchase_date__{look}": _parse_iso_or_raise(text, "تاریخ معتبر نیست")})
+    return qs.order_by("-purchase_date", "-id")
 
 
 def ledger_invoice_or_404(invoice_id):
