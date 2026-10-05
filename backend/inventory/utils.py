@@ -284,3 +284,66 @@ def tracking_dict(r):
         "status_color": TRACKING_STATUS_COLOR.get(r.status, "gray"),
         "customer_phone_fa": fa_num(r.customer_phone),
     }
+
+
+# ---------------------------------------------------------------- ledger
+def ledger_supplier_dict(r):
+    """تأمین‌کننده بایگانی — با تعداد فاکتورهایش (Annotate در service).
+
+    برای نمونه‌های بدون Annotate (جواب create/rename) از شمارش مستقیم
+    relations استفاده می‌شود.
+    """
+    count = getattr(r, "invoice_count", None)
+    if count is None:
+        count = r.invoices.count()
+    return {
+        "id": r.id,
+        "name": r.name,
+        "invoice_count": count or 0,
+    }
+
+
+def ledger_line_dict(r):
+    """یک خط فاکتور — line_total همیشه محاسبه می‌شود، هرگز از ذخیره خوانده نمی‌شود."""
+    quantity = r.quantity or 1
+    unit_price = r.unit_price or 0
+    line_total = quantity * unit_price
+    return {
+        "id": r.id,
+        "watch_name": r.watch_name,
+        "reference": r.reference or "",
+        "quantity": quantity,
+        "quantity_display": fa_num(quantity),
+        "unit_price": unit_price,
+        "unit_price_display": fa_money(unit_price),
+        "line_total": line_total,
+        "line_total_display": fa_money(line_total),
+    }
+
+
+def ledger_invoice_dict(r, with_lines=False):
+    """فاکتور بایگانی — مجموع‌ها همیشه از خطوط فعلی محاسبه می‌شوند (FR-007).
+
+    ``images`` آرایه‌ی مرتبِ نام فایل‌های عکس (ترتیب صفحه) است؛ فرمت‌های
+    نمایشی بقیه‌ی همان قرارداد ledger-api.md را دنبال می‌کند.
+    """
+    lines = list(r.lines.all())
+    total_quantity = sum((l.quantity or 1) for l in lines)
+    total_amount = sum(((l.quantity or 1) * (l.unit_price or 0)) for l in lines)
+    d = {
+        "id": r.id,
+        "supplier_id": r.supplier_id,
+        "purchase_date": r.purchase_date,
+        "purchase_date_fa": fa_date(r.purchase_date),
+        "images": [
+            img.filename for img in r.images.all().order_by("order", "id")
+        ],
+        "total_quantity": total_quantity,
+        "total_quantity_display": fa_num(total_quantity),
+        "total_amount": total_amount,
+        "total_amount_display": fa_money(total_amount),
+    }
+    if with_lines:
+        d["created_at"] = str(r.created_at or "")
+        d["lines"] = [ledger_line_dict(l) for l in lines]
+    return d
