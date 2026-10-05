@@ -28,6 +28,7 @@ urlpatterns = [
     path("sold", views.sold_page, name="sold"),
     path("tracking", views.tracking_page, name="tracking"),
     path("payments", views.payments_page, name="payments"),
+    path("ledger", views.ledger_page, name="ledger"),
     path("settings", views.settings_page, name="settings"),
 
     # --------------------------------- legacy-shape API (frontend contract)
@@ -64,6 +65,12 @@ urlpatterns = [
     path("api/payments/<int:payid>", compat.api_payment_detail),
     path("api/payments/<int:payid>/add", compat.api_payment_add),
     path("api/payments/<int:payid>/settle-full", compat.api_payment_settle_full),
+
+    # ledger (supplier purchase records — حساب معین)
+    path("api/ledger/suppliers", compat.api_ledger_suppliers),
+    path("api/ledger/suppliers/<int:supplier_id>", compat.api_ledger_supplier_detail),
+    path("api/ledger/invoices", compat.api_ledger_invoices),
+    path("api/ledger/invoices/<int:invoice_id>", compat.api_ledger_invoice_detail),
 
     # calendar
     path("api/calendar", compat.api_calendar),

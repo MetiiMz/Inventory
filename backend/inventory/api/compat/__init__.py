@@ -12,7 +12,7 @@ of truth for business rules.  Nothing here contains logic of its own.
 
 Split into one module per domain; this package re-exports the full adapter
 surface so callers keep using ``inventory.api.compat`` unchanged.
-Modules: common, products, sales, payments, repairs, tracking, calendar, reports, settings, uploads, backups_export."""
+Modules: common, products, sales, payments, repairs, tracking, calendar, reports, settings, uploads, backups_export, ledger."""
 
 from .common import _body, _ok, _fail, _guard, _attachment
 from .products import (
@@ -39,6 +39,10 @@ from .backups_export import (
     api_backups_upload, api_backups_download, api_backups_restore, api_backups_delete, api_database_info,
     api_database_clear,
 )
+from .ledger import (
+    api_ledger_suppliers, api_ledger_supplier_detail,
+    api_ledger_invoices, api_ledger_invoice_detail,
+)
 
 __all__ = [
     '_body', '_ok', '_fail', '_guard', '_attachment', 'api_products',
@@ -49,4 +53,5 @@ __all__ = [
     'api_upload', 'serve_image', 'export_file', 'api_import_products', 'api_import_template', 'api_backups',
     'api_backups_create', 'api_backups_upload', 'api_backups_download', 'api_backups_restore', 'api_backups_delete', 'api_database_info',
     'api_database_clear',
+    'api_ledger_suppliers', 'api_ledger_supplier_detail', 'api_ledger_invoices', 'api_ledger_invoice_detail',
 ]
