@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}حساب معین{% endblock %}
+{% block content %}
+<header class="topbar">
+  <div>
+    <h1>حساب معین</h1>
+    <div class="subtitle">بایگانی فاکتورهای خرید از تأمین‌کننده‌ها</div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn btn-primary" id="btn-new-supplier">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
+      تأمین‌کننده‌ی جدید
+    </button>
+  </div>
+</header>
+
+<!-- آکاردئون تأمین‌کننده‌ها — فقط با جاوااسکریپت پر می‌شود -->
+<section class="glass card ledger-card" id="ledger-list"></section>
+
+<div id="ledger-empty" class="empty glass card hidden">
+  <div class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.8h12v16.4l-2.4-1.7-2.4 1.7-2.4-1.7-2.4 1.7L6 20.2z"/><path d="M9 8.5h6M9 12h6"/></svg></div>
+  <h4>تأمین‌کننده‌ای ثبت نشده</h4>
+  <p>برای بایگانی فاکتورهای خرید، ابتدا یک تأمین‌کننده بسازید</p>
+  <button class="btn btn-primary btn-sm" id="btn-empty-new-supplier">تأمین‌کننده‌ی جدید</button>
+</div>
+
+<!-- مودال تأمین‌کننده (ثبت / تغییر نام) -->
+<div class="modal-backdrop" id="modal-supplier">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3 id="supplier-modal-title">تأمین‌کننده‌ی جدید</h3>
+      <button class="modal-close" data-close-modal="modal-supplier" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>نام تأمین‌کننده</label>
+        <input class="input" id="supplier-name" type="text" maxlength="200" placeholder="شخص یا شرکت" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="btn-save-supplier" type="button">ذخیره</button>
+      <button class="btn" data-close-modal="modal-supplier" type="button">انصراف</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال فاکتور جدید -->
+<div class="modal-backdrop" id="modal-invoice">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="invoice-modal-title">فاکتور خرید جدید</h3>
+      <button class="modal-close" data-close-modal="modal-invoice" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="invoice-supplier-id">
+      <div class="field mb-14">
+        <label>تاریخ خرید</label>
+        <input class="input" id="invoice-date" type="text" data-jalali-today inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
+      </div>
+      <div class="field mb-14">
+        <label>عکس فاکتور (هر صفحه یک عکس — اختیاری)</label>
+        <div class="photo-list" id="invoice-photo-items"></div>
+        <button class="btn btn-sm" id="btn-invoice-add-photo" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.7"/><path d="m4.5 17 5-5a1.6 1.6 0 0 1 2.2 0L19 19"/></svg>
+          افزودن عکس
+        </button>
+      </div>
+      <div class="field mb-14">
+        <label>موارد فاکتور</label>
+        <div class="line-table-wrap">
+          <table class="line-table">
+            <thead>
+              <tr>
+                <th>نام ساعت</th><th>رفرنس</th><th>تعداد</th><th>قیمت خرید واحد</th><th>مجموع</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="invoice-lines-body"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-sm" id="btn-invoice-add-line" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
+          افزودن ردیف
+        </button>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <span class="badge blue plain" id="invoice-total-badge">مجموع: ۰ تومان</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="btn-save-invoice" type="button">ذخیره‌ی فاکتور</button>
+      <button class="btn" data-close-modal="modal-invoice" type="button">انصراف</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال جزئیات + ویرایش فاکتور -->
+<div class="modal-backdrop" id="modal-invoice-detail">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>جزئیات فاکتور</h3>
+      <button class="modal-close" data-close-modal="modal-invoice-detail" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="detail-invoice-id">
+      <div class="li-sub" style="margin:0 0 4px">تأمین‌کننده: <b id="detail-supplier-name"></b></div>
+      <div class="field mb-14">
+        <label>تاریخ خرید</label>
+        <input class="input" id="detail-date" type="text" inputmode="numeric" placeholder="۱۴۰۳/۰۵/۱۲">
+      </div>
+      <div class="field mb-14">
+        <label>عکس فاکتور (هر صفحه یک عکس)</label>
+        <div class="photo-list" id="detail-photo-items"></div>
+        <button class="btn btn-sm" id="btn-detail-add-photo" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.7"/><path d="m4.5 17 5-5a1.6 1.6 0 0 1 2.2 0L19 19"/></svg>
+          افزودن عکس
+        </button>
+      </div>
+      <div class="field mb-14">
+        <label>موارد فاکتور</label>
+        <div class="line-table-wrap">
+          <table class="line-table">
+            <thead>
+              <tr>
+                <th>نام ساعت</th><th>رفرنس</th><th>تعداد</th><th>قیمت خرید واحد</th><th>مجموع</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="detail-lines-body"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-sm" id="btn-detail-add-line" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
+          افزودن ردیف
+        </button>
+      </div>
+      <div class="detail-totals">
+        <div><span class="k">تعداد کل</span><span class="v" id="detail-total-qty">۰</span></div>
+        <div><span class="k">مبلغ کل فاکتور</span><span class="v" id="detail-total-amount">۰ تومان</span></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" id="btn-save-detail" type="button">ذخیره‌ی تغییرات</button>
+      <button class="btn btn-danger" id="btn-detail-delete" type="button">حذف فاکتور</button>
+      <button class="btn" data-close-modal="modal-invoice-detail" type="button">بستن</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال نمایش عکس تمام‌قد -->
+<div class="modal-backdrop" id="modal-img-view">
+  <div class="modal modal-img-view">
+    <div class="modal-head">
+      <h3>نمایش عکس</h3>
+      <button class="modal-close" data-close-modal="modal-img-view" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="display:flex;justify-content:center;padding:10px">
+      <img id="img-view-src" alt="" style="max-width:100%;max-height:72vh;border-radius:10px;object-fit:contain">
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close-modal="modal-img-view" type="button">بستن</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال حذف فاکتور -->
+<div class="modal-backdrop" id="modal-delete-invoice">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>حذف فاکتور</h3>
+      <button class="modal-close" data-close-modal="modal-delete-invoice" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 6px">آیا از حذف فاکتور <b id="delete-invoice-name"></b> مطمئن هستید؟</p>
+      <p class="li-sub" style="margin:0">همه‌ی خطوط این فاکتور هم حذف می‌شوند. این عمل قابل بازگشت نیست.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="btn-confirm-delete-invoice" type="button">بله، حذف شود</button>
+      <button class="btn" data-close-modal="modal-delete-invoice" type="button">انصراف</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال حذف تأمین‌کننده -->
+<div class="modal-backdrop" id="modal-delete-supplier">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h3>حذف تأمین‌کننده</h3>
+      <button class="modal-close" data-close-modal="modal-delete-supplier" aria-label="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 6px">آیا از حذف <b id="delete-supplier-name"></b> مطمئن هستید؟</p>
+      <p class="li-sub" style="margin:0">همه‌ی فاکتورها، خطوط و عکس‌های این تأمین‌کننده هم حذف می‌شوند. این عمل قابل بازگشت نیست.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" id="btn-confirm-delete-supplier" type="button">بله، حذف شود</button>
+      <button class="btn" data-close-modal="modal-delete-supplier" type="button">انصراف</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ static_v('js/ledger.js') }}"></script>
+{% endblock %}
