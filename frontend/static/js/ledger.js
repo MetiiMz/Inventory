@@ -5,6 +5,7 @@
 "use strict";
 
 let ledgerSuppliers = [];    // {id, name, invoice_count}
+let openSupplierId = null;   // تأمین‌کننده‌ی باز در آکاردئون (فقط یکی)
 let invoiceCache = {};       // supplierId -> سطرهای خلاصه‌ی فاکتور
 let detailData = null;       // فاکتورِ باز در مودال جزئیات (شکل کامل)
 let detailPhotos = [];       // ترتیب عکس‌ها در مودال جزئیات
@@ -37,13 +38,28 @@ function parseFormattedNumber(formatted) {
   return toEnDigits(formatted).replace(/[,\u066C]/g, "").replace(/\D/g, "");
 }
 
-/* Auto-format input with thousand separators on blur; raw digits on focus */
+/* فرمت زنده‌ی عدد با جداکننده‌ی هزارگان هنگام تایپ (حفظ موقعیت کرسر) */
+function formatPriceLive(input) {
+  const raw = toEnDigits(input.value).replace(/\D/g, "");
+  if (!raw) { input.value = ""; return; }
+  const sel = input.selectionStart ?? input.value.length;
+  const digitsBefore = toEnDigits(input.value.slice(0, sel)).replace(/\D/g, "").length;
+  const grouped = faNum(raw.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+  input.value = grouped;
+  /* کرسر را بعد از همان تعداد رقمِ قبل از ویرایش برگردان */
+  let pos = 0, count = 0;
+  while (pos < grouped.length && count < digitsBefore) {
+    if (/\d/.test(toEnDigits(grouped[pos]))) count++;
+    pos++;
+  }
+  try { input.setSelectionRange(pos, pos); } catch { /* noop */ }
+}
+
+/* اتصال فرمت‌کننده‌ی زنده به ورودی قیمت */
 function bindPriceFormatter(input) {
   if (!input || input.dataset.priceFormatted) return;
   input.dataset.priceFormatted = "1";
-  input.addEventListener("focus", () => {
-    input.value = parseFormattedNumber(input.value);
-  });
+  input.addEventListener("input", () => formatPriceLive(input));
   input.addEventListener("blur", () => {
     input.value = formatNumberWithSeparators(input.value);
   });
@@ -112,10 +128,12 @@ function renderSuppliers() {
     return;
   }
   list.innerHTML = visible.map((s) => {
+    const open = s.id === openSupplierId;
     const rows = invoiceCache[s.id] || [];
     return `
-    <div class="ledger-supplier" data-supplier="${s.id}">
-      <div class="ledger-supplier-head">
+    <div class="ledger-supplier ${open ? "open" : ""}" data-supplier="${s.id}">
+      <div class="ledger-supplier-head" data-supplier-head="${s.id}">
+        <svg class="ledger-supplier-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg>
         <span class="ledger-supplier-name">${esc(s.name)}</span>
         <span class="badge blue plain ledger-supplier-count">${faNum(s.invoice_count)} فاکتور</span>
         <span class="ledger-actions">
@@ -123,6 +141,7 @@ function renderSuppliers() {
           <button class="btn btn-icon btn-sm btn-danger" data-act="delete-supplier" data-id="${s.id}" title="حذف">${TRASH_SVG}</button>
         </span>
       </div>
+      ${open ? `
       <div class="ledger-invoices" data-invoices="${s.id}">
         <button class="btn btn-sm" style="margin:6px 0" data-act="new-invoice" data-id="${s.id}">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
@@ -132,9 +151,28 @@ function renderSuppliers() {
           || (dateFrom || dateTo
               ? '<div class="li-sub" style="padding:8px 4px">فاکتوری در بازه‌ی تاریخ انتخابی ثبت نشده</div>'
               : '<div class="li-sub" style="padding:8px 4px">فاکتوری برای این تأمین‌کننده ثبت نشده</div>')}
-      </div>
+      </div>` : ""}
     </div>`;
   }).join("");
+}
+
+
+/* --------------------------------------------- آکاردئون (فقط یکی باز) */
+
+async function toggleSupplier(id) {
+  if (openSupplierId === id) {
+    openSupplierId = null;
+    renderSuppliers();
+    return;
+  }
+  openSupplierId = id;
+  try {
+    await ensureInvoices(id);
+  } catch (err) {
+    openSupplierId = null;
+    toast(err.message, "error");
+  }
+  renderSuppliers();
 }
 
 
@@ -174,6 +212,9 @@ $("#ledger-list").addEventListener("click", (e) => {
   /* کلیک روی بدنه‌ی سطر → مودال جزئیات/ویرایش */
   const row = e.target.closest(".ledger-invoice");
   if (row) { openInvoiceDetail(+row.dataset.invoice); return; }
+  /* کلیک روی سرتیتر → باز/بسته‌کردن آکاردئون */
+  const head = e.target.closest("[data-supplier-head]");
+  if (head) toggleSupplier(+head.dataset.supplierHead);
 });
 
 /* ------------------------------------------------ مودال تأمین‌کننده */
@@ -388,6 +429,7 @@ $("#btn-save-invoice").addEventListener("click", async () => {
     toast("فاکتور ثبت شد");
     closeModal("modal-invoice");
     delete invoiceCache[supplierId];
+    openSupplierId = supplierId;
     await loadSuppliers();
   } catch (err) {
     toast(err.message, "error");
@@ -613,6 +655,7 @@ $("#btn-save-detail").addEventListener("click", async () => {
     const supplierId = detailData.supplier_id;
     closeModal("modal-invoice-detail");
     delete invoiceCache[supplierId];
+    openSupplierId = supplierId;
     await loadSuppliers();
   } catch (err) {
     toast(err.message, "error");
@@ -683,6 +726,7 @@ $("#btn-confirm-delete-invoice").addEventListener("click", async () => {
     toast("فاکتور حذف شد");
     const supplierId = deletingInvoiceSupplierId;
     if (supplierId) delete invoiceCache[supplierId];
+    if (supplierId) openSupplierId = supplierId;
     await loadSuppliers();
     closeModal("modal-delete-invoice");
   } catch (err) {
@@ -708,6 +752,7 @@ $("#btn-confirm-delete-supplier").addEventListener("click", async () => {
     await api(`/api/ledger/suppliers/${id}`, { method: "DELETE" });
     toast("تأمین‌کننده حذف شد");
     delete invoiceCache[id];
+    if (openSupplierId === id) openSupplierId = null;
     await loadSuppliers();
     closeModal("modal-delete-supplier");
   } catch (err) {
