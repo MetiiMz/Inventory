@@ -5,7 +5,6 @@
 "use strict";
 
 let ledgerSuppliers = [];    // {id, name, invoice_count}
-let openSupplierId = null;   // فقط یک تأمین‌کننده در هر لحظه باز است
 let invoiceCache = {};       // supplierId -> سطرهای خلاصه‌ی فاکتور
 let detailData = null;       // فاکتورِ باز در مودال جزئیات (شکل کامل)
 let detailPhotos = [];       // ترتیب عکس‌ها در مودال جزئیات
@@ -18,6 +17,7 @@ let deletingSupplierId = null;
 let supplierQuery = "";  // جستجوی نام تأمین‌کننده
 let dateFrom = "";       // فیلتر تاریخ فاکتور — از (شمسی/میلادی)
 let dateTo = "";         // فیلتر تاریخ فاکتور — تا
+let detailViewMode = true; // true = view mode, false = edit mode
 
 const IMG_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m5 19 5.2-5.4a1.6 1.6 0 0 1 2.3 0L19 19"/></svg>';
 const PEN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 5.5 4 4L8 20H4v-4z"/><path d="m12.5 7.5 4 4"/></svg>';
@@ -25,11 +25,37 @@ const TRASH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 const digitsOnly = (s) => toEnDigits(s).replace(/\D/g, "");
 
-/* ---------------------------------------------- بارگذاری و رندر آکاردئون */
+/* Format number with thousand separators (Persian digits) */
+function formatNumberWithSeparators(numStr) {
+  const digits = toEnDigits(numStr).replace(/\D/g, "");
+  if (!digits) return "";
+  return faNum(Number(digits).toLocaleString());
+}
+
+/* Parse formatted number back to plain digits */
+function parseFormattedNumber(formatted) {
+  return toEnDigits(formatted).replace(/[,\u066C]/g, "").replace(/\D/g, "");
+}
+
+/* Auto-format input with thousand separators on blur; raw digits on focus */
+function bindPriceFormatter(input) {
+  if (!input || input.dataset.priceFormatted) return;
+  input.dataset.priceFormatted = "1";
+  input.addEventListener("focus", () => {
+    input.value = parseFormattedNumber(input.value);
+  });
+  input.addEventListener("blur", () => {
+    input.value = formatNumberWithSeparators(input.value);
+  });
+}
+
+/* ------------------------------------- بارگذاری تأمین‌کننده‌ها و فاکتورها */
 
 async function loadSuppliers() {
   try {
     ledgerSuppliers = (await api("/api/ledger/suppliers")).items;
+    /* فاکتورهای همه‌ی تأمین‌کننده‌ها را موازی بگیر — هر کارت همیشه لیستش را دارد */
+    await Promise.all(ledgerSuppliers.map((s) => ensureInvoices(s.id).catch(() => {})));
     renderSuppliers();
   } catch (err) {
     toast(err.message, "error");
@@ -86,12 +112,10 @@ function renderSuppliers() {
     return;
   }
   list.innerHTML = visible.map((s) => {
-    const open = s.id === openSupplierId;
     const rows = invoiceCache[s.id] || [];
     return `
-    <div class="ledger-supplier ${open ? "open" : ""}" data-supplier="${s.id}">
-      <div class="ledger-supplier-head" data-supplier-head="${s.id}">
-        <svg class="ledger-supplier-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9.5 6 6 6-6 6"/></svg>
+    <div class="ledger-supplier" data-supplier="${s.id}">
+      <div class="ledger-supplier-head">
         <span class="ledger-supplier-name">${esc(s.name)}</span>
         <span class="badge blue plain ledger-supplier-count">${faNum(s.invoice_count)} فاکتور</span>
         <span class="ledger-actions">
@@ -99,7 +123,6 @@ function renderSuppliers() {
           <button class="btn btn-icon btn-sm btn-danger" data-act="delete-supplier" data-id="${s.id}" title="حذف">${TRASH_SVG}</button>
         </span>
       </div>
-      ${open ? `
       <div class="ledger-invoices" data-invoices="${s.id}">
         <button class="btn btn-sm" style="margin:6px 0" data-act="new-invoice" data-id="${s.id}">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
@@ -109,31 +132,13 @@ function renderSuppliers() {
           || (dateFrom || dateTo
               ? '<div class="li-sub" style="padding:8px 4px">فاکتوری در بازه‌ی تاریخ انتخابی ثبت نشده</div>'
               : '<div class="li-sub" style="padding:8px 4px">فاکتوری برای این تأمین‌کننده ثبت نشده</div>')}
-      </div>` : ""}
+      </div>
     </div>`;
   }).join("");
 }
 
 
 /* --------------------------------------------- آکاردئون (فقط یکی باز) */
-
-async function toggleSupplier(id) {
-  if (openSupplierId === id) {
-    openSupplierId = null;
-    renderSuppliers();
-    return;
-  }
-  openSupplierId = id;
-  try {
-    await ensureInvoices(id);
-  } catch (err) {
-    openSupplierId = null;
-    toast(err.message, "error");
-    renderSuppliers();
-    return;
-  }
-  renderSuppliers();
-}
 
 $("#ledger-list").addEventListener("click", (e) => {
   /* دکمه‌های داخل سطر فاکتور */
@@ -157,16 +162,18 @@ $("#ledger-list").addEventListener("click", (e) => {
   /* کلیک روی عکس سطر → نمایش تمام‌قد اولین عکس */
   const thumb = e.target.closest("[data-thumb]");
   if (thumb) {
-    const inv = (invoiceCache[openSupplierId] || []).find((x) => x.id === +thumb.dataset.thumb);
-    if (inv && inv.images && inv.images.length) showImageFull(inv.images[0]);
+    // Find invoice across all suppliers
+    let inv = null;
+    for (const sid of Object.keys(invoiceCache)) {
+      inv = invoiceCache[sid].find((x) => x.id === +thumb.dataset.thumb);
+      if (inv) break;
+    }
+    if (inv && inv.images && inv.images.length) showImageFull(inv.images[0], inv.images);
     return;
   }
   /* کلیک روی بدنه‌ی سطر → مودال جزئیات/ویرایش */
   const row = e.target.closest(".ledger-invoice");
   if (row) { openInvoiceDetail(+row.dataset.invoice); return; }
-  /* کلیک روی سرتیتر → باز/بسته‌کردن آکاردئون */
-  const head = e.target.closest("[data-supplier-head]");
-  if (head) toggleSupplier(+head.dataset.supplierHead);
 });
 
 /* ------------------------------------------------ مودال تأمین‌کننده */
@@ -284,14 +291,17 @@ function addLineRow(tbody, data = {}) {
     <td class="cell-total">${faMoney(0)}</td>
     <td><button type="button" class="line-remove" title="حذف ردیف">${TRASH_SVG}</button></td>`;
   tbody.appendChild(tr);
+  // Bind price formatter to unit_price input
+  const priceInput = tr.querySelector('[data-f="unit_price"]');
+  if (priceInput) bindPriceFormatter(priceInput);
 }
 
 function lineRowTotals(tbody) {
   let qty = 0;
   let amount = 0;
   for (const tr of tbody.querySelectorAll("tr")) {
-    const q = digitsOnly(tr.querySelector('[data-f="quantity"]').value);
-    const p = digitsOnly(tr.querySelector('[data-f="unit_price"]').value);
+    const q = parseFormattedNumber(tr.querySelector('[data-f="quantity"]').value);
+    const p = parseFormattedNumber(tr.querySelector('[data-f="unit_price"]').value);
     const nq = q ? Number(q) : 1;
     const np = p ? Number(p) : 0;
     tr.querySelector(".cell-total").textContent = faMoney(nq * np);
@@ -323,8 +333,8 @@ function readLines(tbody) {
   return [...tbody.querySelectorAll("tr")].map((tr) => ({
     watch_name: tr.querySelector('[data-f="watch_name"]').value.trim(),
     reference: tr.querySelector('[data-f="reference"]').value.trim(),
-    quantity: digitsOnly(tr.querySelector('[data-f="quantity"]').value),
-    unit_price: digitsOnly(tr.querySelector('[data-f="unit_price"]').value),
+    quantity: parseFormattedNumber(tr.querySelector('[data-f="quantity"]').value),
+    unit_price: parseFormattedNumber(tr.querySelector('[data-f="unit_price"]').value),
   }));
 }
 
@@ -379,9 +389,6 @@ $("#btn-save-invoice").addEventListener("click", async () => {
     closeModal("modal-invoice");
     delete invoiceCache[supplierId];
     await loadSuppliers();
-    openSupplierId = supplierId;
-    await ensureInvoices(supplierId);
-    renderSuppliers();
   } catch (err) {
     toast(err.message, "error");
   } finally {
@@ -391,10 +398,47 @@ $("#btn-save-invoice").addEventListener("click", async () => {
 
 /* ---------------------------------------------- نمایش تمام‌قد عکس */
 
-function showImageFull(filename) {
-  $("#img-view-src").src = `/data/images/${encodeURIComponent(filename)}`;
+/* Image viewer state */
+let imgViewerPhotos = [];
+let imgViewerIndex = 0;
+
+function showImageFull(filename, photos = null) {
+  if (photos) {
+    imgViewerPhotos = photos;
+    imgViewerIndex = photos.indexOf(filename);
+  } else {
+    // Single image fallback
+    imgViewerPhotos = [filename];
+    imgViewerIndex = 0;
+  }
+  updateImgViewer();
   openModal("modal-img-view");
 }
+
+function updateImgViewer() {
+  const img = $("#img-view-src");
+  img.src = `/data/images/${encodeURIComponent(imgViewerPhotos[imgViewerIndex])}`;
+  $("#img-view-prev").disabled = imgViewerIndex === 0;
+  $("#img-view-next").disabled = imgViewerIndex === imgViewerPhotos.length - 1;
+}
+
+function navigateImgViewer(delta) {
+  imgViewerIndex = Math.max(0, Math.min(imgViewerPhotos.length - 1, imgViewerIndex + delta));
+  updateImgViewer();
+}
+
+// Image viewer navigation
+$("#img-view-prev").addEventListener("click", () => navigateImgViewer(-1));
+$("#img-view-next").addEventListener("click", () => navigateImgViewer(1));
+
+// Keyboard navigation for image viewer
+document.addEventListener("keydown", (e) => {
+  const modal = document.getElementById("modal-img-view");
+  if (!modal || !modal.classList.contains("open")) return;
+  if (e.key === "ArrowLeft") navigateImgViewer(-1);
+  else if (e.key === "ArrowRight") navigateImgViewer(1);
+  else if (e.key === "Escape") closeModal("modal-img-view");
+});
 
 /* ------------------------------------------------- مودال جزئیات/ویرایش */
 
@@ -408,6 +452,37 @@ function detailLineRowHtml(line, i) {
     <td class="cell-total">${faMoney(line.quantity * line.unit_price)}</td>
     <td><button type="button" class="line-remove" title="حذف ردیف">${TRASH_SVG}</button></td>
   </tr>`;
+}
+
+/* Toggle detail modal between view and edit mode */
+function setDetailViewMode(isView) {
+  detailViewMode = isView;
+  const tbody = $("#detail-lines-body");
+  const inputs = tbody.querySelectorAll("input");
+  const removeBtns = tbody.querySelectorAll(".line-remove");
+  const addLineBtn = $("#btn-detail-add-line");
+  const addPhotoBtn = $("#btn-detail-add-photo");
+  const saveBtn = $("#btn-save-detail");
+  const editBtn = $("#btn-edit-detail");
+  const dateInput = $("#detail-date");
+  const photoItems = $("#detail-photo-items");
+
+  inputs.forEach(input => {
+    input.readOnly = isView;
+    if (isView) input.classList.add("readonly"); else input.classList.remove("readonly");
+  });
+  removeBtns.forEach(btn => btn.classList.toggle("hidden", isView));
+  addLineBtn.classList.toggle("hidden", isView || tbody.querySelectorAll("tr").length >= 50);
+  addPhotoBtn.classList.toggle("hidden", isView);
+  saveBtn.classList.toggle("hidden", isView);
+  editBtn.classList.toggle("hidden", !isView); // Show edit in view mode, hide in edit mode
+  dateInput.readOnly = isView;
+  if (isView) dateInput.classList.add("readonly"); else dateInput.classList.remove("readonly");
+  
+  // Disable/enable photo reorder/remove in view mode
+  photoItems.querySelectorAll("[data-photo]").forEach(btn => {
+    btn.disabled = isView;
+  });
 }
 
 async function openInvoiceDetail(invoiceId) {
@@ -434,10 +509,18 @@ async function openInvoiceDetail(invoiceId) {
   const tbody = $("#detail-lines-body");
   tbody.innerHTML = data.lines.map(detailLineRowHtml).join("");
 
+  // Bind price formatter to unit_price inputs in detail modal + نمایش با جداکننده
+  tbody.querySelectorAll('[data-f="unit_price"]').forEach((inp) => {
+    bindPriceFormatter(inp);
+    inp.value = formatNumberWithSeparators(inp.value);
+  });
+
   renderPhotos($("#detail-photo-items"), detailPhotos);
-  $("#btn-detail-add-line").classList.toggle("hidden", data.lines.length >= 50);
   lineRowTotals(tbody);
   updateDetailTotals();
+
+  // همیشه با حالت نمایش باز شود — بعد از پرشدن جدول
+  setDetailViewMode(true);
 
   openModal("modal-invoice-detail");
 }
@@ -453,8 +536,22 @@ $("#detail-date").addEventListener("input", () => {
   detailDateChanged = true;
 });
 
+/* در حالت نمایش، تقویم نباید باز شود */
+$("#detail-date").addEventListener("click", (e) => {
+  if (detailViewMode) e.stopImmediatePropagation();
+}, true);
+
 bindPhotoTools($("#detail-photo-items"), detailPhotos);
 bindPhotoAdd($("#btn-detail-add-photo"), $("#detail-photo-items"), detailPhotos);
+
+// Click on photo in detail modal to open full-size viewer with navigation
+$("#detail-photo-items").addEventListener("click", (e) => {
+  const img = e.target.closest(".photo-item img");
+  if (img) {
+    const idx = +img.closest(".photo-item").dataset.idx;
+    showImageFull(detailPhotos[idx], detailPhotos);
+  }
+});
 
 $("#btn-detail-add-line").addEventListener("click", () => {
   const tbody = $("#detail-lines-body");
@@ -517,14 +614,16 @@ $("#btn-save-detail").addEventListener("click", async () => {
     closeModal("modal-invoice-detail");
     delete invoiceCache[supplierId];
     await loadSuppliers();
-    openSupplierId = supplierId;
-    await ensureInvoices(supplierId);
-    renderSuppliers();
   } catch (err) {
     toast(err.message, "error");
   } finally {
     btn.disabled = false;
   }
+});
+
+// Edit button - switch to edit mode
+$("#btn-edit-detail").addEventListener("click", () => {
+  setDetailViewMode(false);
 });
 
 /* ------------------------------------------------ جستجو و فیلتر تاریخ */
@@ -537,12 +636,7 @@ $("#supplier-search").addEventListener("input", (e) => {
 function refreshWithFilters() {
   /* تاریخِ فیلتر عوض شد؛ کشِ فاکتورها را خالی کن و تازه بیاور */
   for (const k of Object.keys(invoiceCache)) delete invoiceCache[k];
-  loadSuppliers().then(async () => {
-    if (openSupplierId != null) {
-      try { await ensureInvoices(openSupplierId); } catch (err) { openSupplierId = null; }
-      renderSuppliers();
-    }
-  });
+  loadSuppliers();
 }
 
 $("#filter-date-from").addEventListener("change", (e) => { dateFrom = e.target.value.trim(); refreshWithFilters(); });
@@ -590,11 +684,6 @@ $("#btn-confirm-delete-invoice").addEventListener("click", async () => {
     const supplierId = deletingInvoiceSupplierId;
     if (supplierId) delete invoiceCache[supplierId];
     await loadSuppliers();
-    if (supplierId) {
-      openSupplierId = supplierId;
-      await ensureInvoices(supplierId);
-      renderSuppliers();
-    }
     closeModal("modal-delete-invoice");
   } catch (err) {
     toast(err.message, "error");
@@ -619,7 +708,6 @@ $("#btn-confirm-delete-supplier").addEventListener("click", async () => {
     await api(`/api/ledger/suppliers/${id}`, { method: "DELETE" });
     toast("تأمین‌کننده حذف شد");
     delete invoiceCache[id];
-    if (openSupplierId === id) openSupplierId = null;
     await loadSuppliers();
     closeModal("modal-delete-supplier");
   } catch (err) {

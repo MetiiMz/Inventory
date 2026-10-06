@@ -161,7 +161,8 @@
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-primary" id="btn-save-detail" type="button">ذخیره‌ی تغییرات</button>
+      <button class="btn btn-primary" id="btn-edit-detail" type="button">ویرایش</button>
+      <button class="btn btn-primary hidden" id="btn-save-detail" type="button">ذخیره‌ی تغییرات</button>
       <button class="btn btn-danger" id="btn-detail-delete" type="button">حذف فاکتور</button>
       <button class="btn" data-close-modal="modal-invoice-detail" type="button">بستن</button>
     </div>
@@ -177,8 +178,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
       </button>
     </div>
-    <div class="modal-body" style="display:flex;justify-content:center;padding:10px">
-      <img id="img-view-src" alt="" style="max-width:100%;max-height:72vh;border-radius:10px;object-fit:contain">
+    <div class="modal-body img-view-body">
+      <button class="btn btn-icon img-nav" id="img-view-prev" type="button" aria-label="عکس قبلی" title="قبلی">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <img id="img-view-src" alt="">
+      <button class="btn btn-icon img-nav" id="img-view-next" type="button" aria-label="عکس بعدی" title="بعدی">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
     </div>
     <div class="modal-foot">
       <button class="btn" data-close-modal="modal-img-view" type="button">بستن</button>
