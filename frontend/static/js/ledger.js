@@ -70,8 +70,18 @@ function bindPriceFormatter(input) {
 async function loadSuppliers() {
   try {
     ledgerSuppliers = (await api("/api/ledger/suppliers")).items;
-    /* فاکتورهای همه‌ی تأمین‌کننده‌ها را موازی بگیر — هر کارت همیشه لیستش را دارد */
-    await Promise.all(ledgerSuppliers.map((s) => ensureInvoices(s.id).catch(() => {})));
+    if (openSupplierId !== null) {
+      if (supplierById(openSupplierId)) {
+        try {
+          await ensureInvoices(openSupplierId);   // ensureInvoices is a no-op if cached
+        } catch (err) {
+          toast(err.message, "error");
+          openSupplierId = null;
+        }
+      } else {
+        openSupplierId = null;                   // supplier no longer exists
+      }
+    }
     renderSuppliers();
   } catch (err) {
     toast(err.message, "error");
@@ -98,7 +108,7 @@ function invoiceRowHtml(inv) {
     ? `<span class="ledger-invoice-thumb" data-thumb="${inv.id}"><img src="/data/images/${encodeURIComponent(imgs[0])}" alt="" loading="lazy">${rest > 0 ? `<span class="thumb-plus">+${faNum(rest)}</span>` : ""}</span>`
     : `<span class="ledger-invoice-thumb" data-thumb="${inv.id}">${IMG_SVG}</span>`;
   return `
-  <div class="ledger-invoice" data-invoice="${inv.id}">
+  <div class="ledger-invoice" data-invoice="${inv.id}" data-supplier="${inv.supplier_id}">
     ${thumb}
     <div class="ledger-invoice-main">
       <div class="ledger-invoice-date">${esc(inv.purchase_date_fa || "—")}</div>
@@ -184,7 +194,10 @@ $("#ledger-list").addEventListener("click", (e) => {
   if (rowBtn) {
     const id = +rowBtn.dataset.id;
     if (rowBtn.dataset.rowAct === "edit") openInvoiceDetail(id);
-    else if (rowBtn.dataset.rowAct === "delete") openDeleteInvoice(id);
+    else if (rowBtn.dataset.rowAct === "delete") {
+      const supplierId = +rowBtn.closest(".ledger-invoice").dataset.supplier;
+      openDeleteInvoice(id, supplierId);
+    }
     return;
   }
   /* کلیدهای سرتیتر تأمین‌کننده */
@@ -200,12 +213,11 @@ $("#ledger-list").addEventListener("click", (e) => {
   /* کلیک روی عکس سطر → نمایش تمام‌قد اولین عکس */
   const thumb = e.target.closest("[data-thumb]");
   if (thumb) {
-    // Find invoice across all suppliers
-    let inv = null;
-    for (const sid of Object.keys(invoiceCache)) {
-      inv = invoiceCache[sid].find((x) => x.id === +thumb.dataset.thumb);
-      if (inv) break;
-    }
+    const invEl = thumb.closest(".ledger-invoice");
+    const supplierId = invEl ? +invEl.dataset.supplier : null;
+    const inv = supplierId
+      ? (invoiceCache[supplierId] || []).find((x) => x.id === +thumb.dataset.thumb)
+      : null;
     if (inv && inv.images && inv.images.length) showImageFull(inv.images[0], inv.images);
     return;
   }
@@ -514,7 +526,7 @@ function setDetailViewMode(isView) {
     if (isView) input.classList.add("readonly"); else input.classList.remove("readonly");
   });
   removeBtns.forEach(btn => btn.classList.toggle("hidden", isView));
-  addLineBtn.classList.toggle("hidden", isView || tbody.querySelectorAll("tr").length >= 50);
+  addLineBtn.classList.toggle("hidden", isView);
   addPhotoBtn.classList.toggle("hidden", isView);
   saveBtn.classList.toggle("hidden", isView);
   editBtn.classList.toggle("hidden", !isView); // Show edit in view mode, hide in edit mode
@@ -597,9 +609,7 @@ $("#detail-photo-items").addEventListener("click", (e) => {
 
 $("#btn-detail-add-line").addEventListener("click", () => {
   const tbody = $("#detail-lines-body");
-  if (tbody.querySelectorAll("tr").length >= 50) return;
   addLineRow(tbody);
-  $("#btn-detail-add-line").classList.toggle("hidden", tbody.querySelectorAll("tr").length >= 50);
   lineRowTotals(tbody);
   updateDetailTotals();
 });
@@ -626,7 +636,6 @@ detailBody.addEventListener("click", (e) => {
   btn.closest("tr").remove();
   lineRowTotals(detailBody);
   updateDetailTotals();
-  $("#btn-detail-add-line").classList.toggle("hidden", detailBody.querySelectorAll("tr").length >= 50);
 });
 
 $("#btn-save-detail").addEventListener("click", async () => {
@@ -697,16 +706,14 @@ loadSuppliers();
 
 /* --------------------------------------------------- حذف‌ها */
 
-function openDeleteInvoice(invoiceId) {
+function openDeleteInvoice(invoiceId, supplierId) {
   deletingInvoiceId = invoiceId;
-  deletingInvoiceSupplierId = null;
+  deletingInvoiceSupplierId = supplierId ? +supplierId : null;
   let label = "—";
-  for (const sid of Object.keys(invoiceCache)) {
-    const row = invoiceCache[sid].find((x) => x.id === invoiceId);
+  if (deletingInvoiceSupplierId !== null) {
+    const row = (invoiceCache[deletingInvoiceSupplierId] || []).find((x) => x.id === invoiceId);
     if (row) {
-      label = `${row.purchase_date_fa || "—"} — ${supplierById(+sid) ? supplierById(+sid).name : ""}`;
-      deletingInvoiceSupplierId = +sid;
-      break;
+      label = `${row.purchase_date_fa || "—"} — ${supplierById(deletingInvoiceSupplierId) ? supplierById(deletingInvoiceSupplierId).name : ""}`;
     }
   }
   if (deletingInvoiceSupplierId === null && detailData && detailData.id === invoiceId) {
@@ -764,5 +771,5 @@ $("#btn-confirm-delete-supplier").addEventListener("click", async () => {
 
 /* حذف فاکتور از مودال جزئیات */
 $("#btn-detail-delete").addEventListener("click", () => {
-  if (detailData) openDeleteInvoice(detailData.id);
+  if (detailData) openDeleteInvoice(detailData.id, detailData.supplier_id);
 });
