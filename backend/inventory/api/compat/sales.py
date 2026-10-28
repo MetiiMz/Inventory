@@ -48,7 +48,9 @@ def api_sale_detail(request, sid):
             sale.refresh_from_db()
             return _ok(sale=sale_dict(sale, sale.product))
         return _guard(run)
-    return _guard(lambda: (services.delete_sale(sale), _ok())[1])
+    if request.method == "DELETE":
+        return _guard(lambda: (services.delete_sale(sale), _ok())[1])
+    return _fail("متد پشتیبانی نمی‌شود", 405)
 
 
 

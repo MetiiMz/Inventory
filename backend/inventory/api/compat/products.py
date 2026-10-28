@@ -38,7 +38,9 @@ def api_product_detail(request, pid):
             product.refresh_from_db()
             return _ok(product=product_dict(product))
         return _guard(run)
-    return _guard(lambda: (services.delete_product(product), _ok())[1])
+    if request.method == "DELETE":
+        return _guard(lambda: (services.delete_product(product), _ok())[1])
+    return _fail("متد پشتیبانی نمی‌شود", 405)
 
 
 

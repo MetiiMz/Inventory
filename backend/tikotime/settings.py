@@ -18,7 +18,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------- security
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-tikotime-local-dev-key")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = ["*"]
+# اپ آفلاینِ محلی؛ فقط لوکال‌هاست + امکان افزودن دستی با DJANGO_ALLOWED_HOSTS
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]"] + [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.staticfiles",
@@ -27,6 +32,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "inventory.middleware.SameOriginMiddleware",
     "django.middleware.common.CommonMiddleware",
 ]
 

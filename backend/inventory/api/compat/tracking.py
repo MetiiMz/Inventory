@@ -38,7 +38,9 @@ def api_tracking_detail(request, tid):
             tracking.refresh_from_db()
             return _ok(tracking=tracking_dict(tracking))
         return _guard(run)
-    return _guard(lambda: (services.delete_tracking(tracking), _ok())[1])
+    if request.method == "DELETE":
+        return _guard(lambda: (services.delete_tracking(tracking), _ok())[1])
+    return _fail("متد پشتیبانی نمی‌شود", 405)
 
 
 

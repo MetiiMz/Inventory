@@ -39,7 +39,9 @@ def api_repair_detail(request, rid):
             repair.refresh_from_db()
             return _ok(repair=repair_dict(repair))
         return _guard(run)
-    return _guard(lambda: (services.delete_repair(repair), _ok())[1])
+    if request.method == "DELETE":
+        return _guard(lambda: (services.delete_repair(repair), _ok())[1])
+    return _fail("متد پشتیبانی نمی‌شود", 405)
 
 
 
