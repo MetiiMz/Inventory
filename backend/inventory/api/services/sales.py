@@ -26,6 +26,10 @@ _SALE_SORT = {
 
 _SALE_NOCASE = {"product__name", "product__office_code", "customer"}
 
+# A4: a cash sale must be paid in full — partial payment is a deposit
+_CASH_PARTIAL_MSG = ("برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ "
+                     "برای پرداخت ناقص «بیعانه» را انتخاب کنید")
+
 
 def sale_queryset(params) -> QuerySet:
     """Filtered/ordered sale list.
@@ -183,6 +187,9 @@ def create_sale(payload) -> Sale:
         # a complete cash sale; without a breakdown everything counts as cash
         if paid_now <= 0:
             paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
+        elif paid_now < sale_price - 0.001:
+            # A4: a partial breakdown is a deposit, not a cash sale
+            raise ApiError(400, _CASH_PARTIAL_MSG)
         payment_kind = "cash"
         is_settled = True
 
@@ -258,6 +265,21 @@ def update_sale(sale: Sale, payload) -> Sale:
     if payment_kind == "cash" and was_deposit and paid_now < sale_price - 0.001:
         paid_cash += sale_price - paid_now
         paid_now = sale_price
+    # A4: a cash sale must be paid in full
+    if payment_kind == "cash":
+        price_changed = abs(sale_price - sale.sale_price) > 0.001
+        breakdown_changed = (
+            abs(paid_cash - sale.paid_cash) > 0.001
+            or abs(paid_pos - sale.paid_pos) > 0.001
+            or abs(paid_card2card - sale.paid_card2card) > 0.001)
+        if (price_changed and not breakdown_changed
+                and paid_now < sale_price - 0.001):
+            # the stored breakdown no longer matches the new price and the
+            # client did not adjust it — reset to an all-cash payment
+            paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
+            paid_now = sale_price
+        elif 0 < paid_now < sale_price - 0.001:
+            raise ApiError(400, _CASH_PARTIAL_MSG)
 
     purchase_price = to_float(payload.get("purchase_price"),
                               product.purchase_price if product else 0)

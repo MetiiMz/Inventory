@@ -132,6 +132,7 @@ class SaleCreateTests(TestCase):
             (sale_payload(p.id, sale_date="31/31/9999"), "تاریخ فروش"),
             (sale_payload(p.id, payment_type="deposit", paid_cash="0"),
              "بیعانه"),
+            (sale_payload(p.id, paid_cash="500"), "برای فروش نقدی"),
         ]
         for payload, fragment in cases:
             _, err = call(services.create_sale, payload)
@@ -373,17 +374,99 @@ class SaleDepositReceiptSyncTests(TestCase):
         receipt = Payment.objects.get(sale=sale)
         self.assertEqual(receipt.settled_at, today_iso())
 
-    def test_cash_sale_underpaid_by_edit_becomes_unsettled(self):
-        # the settlement helper derives from remaining <= 0.001 for cash too
+    def test_cash_partial_breakdown_by_edit_rejected(self):
+        # A4: a partial breakdown on a cash sale is rejected — «بیعانه» instead
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-UP", website_code="WS-UP").id))
-        services.update_sale(cash_sale, {
+        _, err = call(services.update_sale, cash_sale, {
             "paid_cash": "500000", "paid_pos": "500000"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("نقدی", err.message)
         cash_sale.refresh_from_db()
-        self.assertFalse(cash_sale.is_settled)
-        self.assertEqual(cash_sale.settled_at, "")
-        services.update_sale(cash_sale, {"paid_cash": "1500000",
-                                         "paid_pos": "0"})
-        cash_sale.refresh_from_db()
+        self.assertEqual(cash_sale.paid_cash, 1500000)  # unchanged
         self.assertTrue(cash_sale.is_settled)
-        self.assertEqual(cash_sale.settled_at, today_iso())
+
+
+class SaleCashFullPaymentTests(TestCase):
+    """A4: a cash sale must be paid in full — partial = «بیعانه» instead."""
+
+    def test_create_cash_partial_breakdown_rejected(self):
+        p = make_product()
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, sale_price="2000000", paid_cash="500000"))
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("برای فروش نقدی", err.message)
+        self.assertIn("بیعانه", err.message)
+        self.assertEqual(Sale.objects.count(), 0)
+        self.assertTrue(Product.objects.get(id=p.id).available)
+
+    def test_create_cash_full_breakdown_accepted(self):
+        p = make_product()
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, sale_price="2000000", paid_cash="500000",
+            paid_pos="1500000"))
+        self.assertIsNone(err)
+        self.assertTrue(sale.is_settled)
+        self.assertEqual((sale.paid_cash, sale.paid_pos), (500000.0, 1500000.0))
+
+    def test_create_cash_without_breakdown_still_all_cash(self):
+        p = make_product()
+        sale, _ = call(services.create_sale, sale_payload(p.id))
+        self.assertEqual(sale.paid_cash, 1500000)
+
+    def test_update_price_change_with_stale_breakdown_resets_to_all_cash(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-RS", website_code="WS-RS").id))
+        services.update_sale(cash_sale, {"sale_price": "2000000"})
+        cash_sale.refresh_from_db()
+        self.assertEqual(cash_sale.sale_price, 2000000)
+        self.assertEqual(cash_sale.paid_cash, 2000000)  # reset, was 1500000
+        self.assertEqual(cash_sale.paid_pos, 0)
+        self.assertTrue(cash_sale.is_settled)
+
+    def test_update_price_change_with_matching_breakdown_kept(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-MB", website_code="WS-MB").id,
+            paid_cash="0", paid_pos="1500000"))
+        services.update_sale(cash_sale, {"sale_price": "2000000",
+                                         "paid_pos": "2000000"})
+        cash_sale.refresh_from_db()
+        self.assertEqual(cash_sale.paid_pos, 2000000)
+        self.assertEqual(cash_sale.paid_cash, 0)
+        self.assertTrue(cash_sale.is_settled)
+
+    def test_update_explicit_partial_breakdown_rejected(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-EP", website_code="WS-EP").id))
+        _, err = call(services.update_sale, cash_sale, {
+            "paid_cash": "500000", "paid_pos": "500000"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("برای فروش نقدی", err.message)
+        cash_sale.refresh_from_db()
+        self.assertEqual(cash_sale.paid_cash, 1500000)
+        self.assertTrue(cash_sale.is_settled)
+
+    def test_legacy_partial_cash_row_rejected_on_edit(self):
+        # a cash sale stored by the old buggy behaviour cannot be edited
+        # until its amounts are fixed (or it becomes a deposit)
+        p = make_product(office_code="OF-LG", website_code="WS-LG")
+        legacy = Sale.objects.create(
+            product=p, sale_price=2000, purchase_price=1000, profit=1000,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789",
+            paid_cash=500, payment_type="cash", is_settled=True)
+        _, err = call(services.update_sale, legacy, {"notes": "edit"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("برای فروش نقدی", err.message)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.paid_cash, 500)
+
+    def test_legacy_partial_cash_row_fixed_by_full_breakdown(self):
+        p = make_product(office_code="OF-L2", website_code="WS-L2")
+        legacy = Sale.objects.create(
+            product=p, sale_price=2000, purchase_price=1000, profit=1000,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789",
+            paid_cash=500, payment_type="cash", is_settled=True)
+        services.update_sale(legacy, {"paid_cash": "2000", "paid_pos": "0"})
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.paid_cash, 2000)
+        self.assertTrue(legacy.is_settled)

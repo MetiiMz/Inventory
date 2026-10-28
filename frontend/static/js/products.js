@@ -326,14 +326,21 @@ function updateSaleHints() {
     parseMoneyInput(form.querySelector('[name="paid_card2card"]'));
 
   if (bdHint) {
-    if (paid > 0) {
-      bdHint.textContent = paid > total + 0.001
-        ? `جمع پرداخت‌ها نمی‌تواند از قیمت فروش (${faMoney(total)}) بیشتر باشد`
-        : `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
+    if (paid > total + 0.001) {
+      bdHint.textContent = `جمع پرداخت‌ها نمی‌تواند از قیمت فروش (${faMoney(total)}) بیشتر باشد`;
+      bdHint.style.color = "var(--red)";
+    } else if (type === "cash" && paid > 0 && paid < total - 0.001) {
+      bdHint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
+      bdHint.style.color = "var(--red)";
+    } else if (paid > 0) {
+      bdHint.textContent = `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
+      bdHint.style.color = "";
     } else if (type === "deposit") {
       bdHint.textContent = "برای بیعانه، دست‌کم یکی از مبالغ را وارد کنید";
+      bdHint.style.color = "";
     } else {
       bdHint.textContent = "اگر خالی بماند، کل مبلغ نقدی ثبت می‌شود";
+      bdHint.style.color = "";
     }
   }
 }

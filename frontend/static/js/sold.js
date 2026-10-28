@@ -234,6 +234,7 @@ function openEditModal(s) {
   form.querySelector('[name="payment_type"]').value = s.payment_type || "cash";
   $$("#edit-payment-chips .chip").forEach((c) =>
     c.classList.toggle("active", c.dataset.pay === (s.payment_type || "cash")));
+  updateSaleEditHints();
   openModal("modal-sale-edit");
 }
 
@@ -242,6 +243,35 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
   if (!chip) return;
   $$("#edit-payment-chips .chip").forEach((c) => c.classList.toggle("active", c === chip));
   $("#sale-edit-form [name='payment_type']").value = chip.dataset.pay;
+  updateSaleEditHints();
+});
+
+/* A4: warn when a cash sale would be saved with a partial breakdown */
+function updateSaleEditHints() {
+  const form = $("#sale-edit-form");
+  const hint = $("#sale-edit-paid-hint");
+  if (!hint) return;
+  const type = form.querySelector('[name="payment_type"]').value;
+  const num = (v) => +toEnDigits(v || "").replace(/[^\d]/g, "") || 0;
+  const total = num(form.querySelector('[name="sale_price"]').value);
+  const paid = num(form.querySelector('[name="paid_cash"]').value) +
+    num(form.querySelector('[name="paid_pos"]').value) +
+    num(form.querySelector('[name="paid_card2card"]').value);
+  if (type === "cash" && paid > 0 && paid < total - 0.001) {
+    hint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
+    hint.style.color = "var(--red)";
+  } else if (paid > 0) {
+    hint.textContent = `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
+    hint.style.color = "";
+  } else {
+    hint.textContent = "";
+    hint.style.color = "";
+  }
+}
+
+["sale_price", "paid_cash", "paid_pos", "paid_card2card"].forEach((name) => {
+  $("#sale-edit-form").querySelector(`[name="${name}"]`)
+    .addEventListener("input", updateSaleEditHints);
 });
 
 $("#btn-save-edit").addEventListener("click", async () => {
