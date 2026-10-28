@@ -187,12 +187,15 @@ class SaleUpdateDeleteTests(TestCase):
         self.sale.refresh_from_db()
         self.assertEqual(self.sale.sale_price, 1500000)  # unchanged
 
-    def test_update_deposit_price_keeps_stored_receipt(self):
+    def test_update_deposit_price_syncs_receipt(self):
+        # A2: the receipt mirrors the edited sale (paid amounts fall back to
+        # the sale's current ones, so they are kept; the total follows the price)
         dep_sale = Sale.objects.filter(payment_type="deposit").first()
         receipt = Payment.objects.get(sale=dep_sale)
         services.update_sale(dep_sale, {"sale_price": "900000"})
         receipt.refresh_from_db()
         self.assertEqual(receipt.paid_amount, 500000)  # stored amount kept
+        self.assertEqual(receipt.total_amount, 900000)
         dep_sale.refresh_from_db()
         self.assertEqual(dep_sale.sale_price, 900000)
         self.assertEqual(dep_sale.profit, -100000)     # 900000 - 1000000
@@ -234,3 +237,153 @@ class SaleUpdateDeleteTests(TestCase):
         self.assertTrue(Product.objects.get(id=self.p.id).available)
         self.assertEqual(
             Payment.objects.filter(sale_id=dep_sale.id).count(), 0)
+
+
+class SaleDepositReceiptSyncTests(TestCase):
+    """A2: editing a deposit sale keeps its receipt and settlement in sync.
+
+    Invariant — for every deposit sale:
+    ``paid_cash+paid_pos+paid_card2card == receipt.paid_amount`` and
+    ``receipt.total_amount == sale.sale_price``.
+    """
+
+    def setUp(self):
+        self.p = make_product()
+        self.deposit = services.create_sale(sale_payload(
+            self.p.id, payment_type="deposit", sale_price="1500000",
+            paid_cash="500000"))
+        self.receipt = Payment.objects.get(sale=self.deposit)
+
+    def assert_invariant(self, sale):
+        sale.refresh_from_db()
+        receipt = Payment.objects.get(sale=sale)
+        paid_total = sale.paid_cash + sale.paid_pos + sale.paid_card2card
+        self.assertEqual(paid_total, receipt.paid_amount)
+        self.assertEqual(receipt.total_amount, sale.sale_price)
+
+    def test_edit_price_buyer_and_paid_amounts_sync_receipt(self):
+        services.update_sale(self.deposit, {
+            "sale_price": "1800000",
+            "paid_cash": "500000", "paid_pos": "300000",
+            "customer": "مریم", "customer_phone": "09121112222",
+        })
+        self.deposit.refresh_from_db()
+        self.receipt.refresh_from_db()
+        self.assertEqual(self.receipt.total_amount, 1800000)
+        self.assertEqual(self.receipt.paid_amount, 800000)
+        self.assertEqual(self.receipt.customer_name, "مریم")
+        self.assertEqual(self.receipt.customer_phone, "09121112222")
+        self.assertFalse(self.deposit.is_settled)
+        self.assertIn("مانده", self.receipt.notes)
+        self.assert_invariant(self.deposit)
+
+    def test_edit_date_updates_receipt_pay_date(self):
+        services.update_sale(self.deposit, {"sale_date": "1405/02/20"})
+        self.receipt.refresh_from_db()
+        self.assertEqual(self.receipt.pay_date, "2026-05-10")
+
+    def test_fully_paid_deposit_edit_marks_settled_on_both(self):
+        services.update_sale(self.deposit, {"paid_cash": "1500000"})
+        self.deposit.refresh_from_db()
+        self.receipt.refresh_from_db()
+        self.assertTrue(self.deposit.is_settled)
+        self.assertEqual(self.deposit.settled_at, today_iso())
+        self.assertEqual(self.receipt.settled_at, today_iso())
+        self.assert_invariant(self.deposit)
+
+    def test_price_raise_after_settlement_clears_the_stamp(self):
+        services.update_sale(self.deposit, {"paid_cash": "1500000"})   # settle
+        services.update_sale(self.deposit, {"sale_price": "2000000"})  # reopen
+        self.deposit.refresh_from_db()
+        self.receipt.refresh_from_db()
+        self.assertFalse(self.deposit.is_settled)
+        self.assertEqual(self.deposit.settled_at, "")
+        self.assertEqual(self.receipt.settled_at, "")
+
+    def test_cash_to_deposit_without_upfront_rejected(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-C2", website_code="WS-C2").id))
+        _, err = call(services.update_sale, cash_sale, {
+            "payment_type": "deposit",
+            "paid_cash": "0", "paid_pos": "0", "paid_card2card": "0",
+        })
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("بیعانه", err.message)
+        cash_sale.refresh_from_db()
+        self.assertEqual(cash_sale.payment_type, "cash")
+        self.assertFalse(Payment.objects.filter(sale=cash_sale).exists())
+
+    def test_cash_to_deposit_creates_receipt(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-C3", website_code="WS-C3").id))
+        services.update_sale(cash_sale, {
+            "payment_type": "deposit", "paid_cash": "600000"})
+        cash_sale.refresh_from_db()
+        receipt = Payment.objects.get(sale=cash_sale)
+        self.assertEqual(cash_sale.payment_type, "deposit")
+        self.assertFalse(cash_sale.is_settled)
+        self.assertEqual(receipt.total_amount, 1500000)
+        self.assertEqual(receipt.paid_amount, 600000)
+        self.assertIn("بیعانه فروش", receipt.notes)
+        self.assert_invariant(cash_sale)
+
+    def test_cash_to_deposit_fully_paid_is_settled(self):
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-C4", website_code="WS-C4").id))
+        services.update_sale(cash_sale, {
+            "payment_type": "deposit", "paid_cash": "1500000"})
+        cash_sale.refresh_from_db()
+        self.assertTrue(cash_sale.is_settled)
+        receipt = Payment.objects.get(sale=cash_sale)
+        self.assertEqual(receipt.paid_amount, receipt.total_amount)
+
+    def test_deposit_to_cash_settles_remainder_into_paid_cash(self):
+        services.update_sale(self.deposit, {"payment_type": "cash"})
+        self.deposit.refresh_from_db()
+        self.receipt.refresh_from_db()
+        self.assertEqual(self.deposit.payment_type, "cash")
+        self.assertEqual(self.deposit.paid_cash, 1500000)
+        self.assertTrue(self.deposit.is_settled)
+        self.assertEqual(self.deposit.settled_at, today_iso())
+        self.assertEqual(self.receipt.total_amount, 1500000)
+        self.assertEqual(self.receipt.paid_amount, 1500000)
+        self.assertEqual(self.receipt.settled_at, today_iso())
+
+    def test_manual_receipt_note_is_preserved(self):
+        self.receipt.notes = "یادداشت دستی فقره"
+        self.receipt.save(update_fields=["notes"])
+        services.update_sale(self.deposit, {"sale_price": "1700000"})
+        self.receipt.refresh_from_db()
+        self.assertEqual(self.receipt.notes, "یادداشت دستی فقره")
+
+    def test_auto_receipt_note_refreshes_remaining(self):
+        from inventory.utils import fa_money
+        services.update_sale(self.deposit, {"sale_price": "1700000"})
+        self.receipt.refresh_from_db()
+        self.assertIn(fa_money(1200000), self.receipt.notes)
+        self.assertIn(f"#{self.deposit.id}", self.receipt.notes)
+
+    def test_deposit_fully_paid_at_creation_is_settled(self):
+        p = make_product(office_code="OF-FP", website_code="WS-FP")
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, payment_type="deposit", sale_price="1500000",
+            paid_cash="1500000"))
+        self.assertIsNone(err)
+        self.assertTrue(sale.is_settled)
+        receipt = Payment.objects.get(sale=sale)
+        self.assertEqual(receipt.settled_at, today_iso())
+
+    def test_cash_sale_underpaid_by_edit_becomes_unsettled(self):
+        # the settlement helper derives from remaining <= 0.001 for cash too
+        cash_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-UP", website_code="WS-UP").id))
+        services.update_sale(cash_sale, {
+            "paid_cash": "500000", "paid_pos": "500000"})
+        cash_sale.refresh_from_db()
+        self.assertFalse(cash_sale.is_settled)
+        self.assertEqual(cash_sale.settled_at, "")
+        services.update_sale(cash_sale, {"paid_cash": "1500000",
+                                         "paid_pos": "0"})
+        cash_sale.refresh_from_db()
+        self.assertTrue(cash_sale.is_settled)
+        self.assertEqual(cash_sale.settled_at, today_iso())

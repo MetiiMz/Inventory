@@ -91,6 +91,39 @@ def next_invoice_code() -> str:
     return invoice_code(last_id + 1, today_iso())
 
 
+def _deposit_note(sale_id: int, remaining: float) -> str:
+    """The auto-generated note of a deposit sale's receipt (keeps the legacy text)."""
+    return (f"بیعانه فروش #{sale_id} — مانده: "
+            f"{fa_money(remaining)} تومان")
+
+
+def _sync_settlement(sale: Sale, payment: Payment | None = None) -> None:
+    """Derive ``is_settled``/``settled_at`` on the sale (and its receipt).
+
+    A balance of ``remaining <= 0.001`` counts as settled: ``settled_at`` is
+    stamped with today's date (kept when it is already stamped); any open
+    balance clears the stamp.  The linked receipt's ``total/paid`` is the
+    source of truth when one is passed, otherwise the sale's own amounts.
+    Must run inside ``transaction.atomic`` — A3 reuses it for the receipt
+    endpoints.
+    """
+    if payment is not None:
+        remaining = payment.total_amount - payment.paid_amount
+        settled_at = payment.settled_at
+    else:
+        paid_total = sale.paid_cash + sale.paid_pos + sale.paid_card2card
+        remaining = sale.sale_price - paid_total
+        settled_at = sale.settled_at
+    is_settled = remaining <= 0.001
+    settled_at = (settled_at or today_iso()) if is_settled else ""
+    sale.is_settled = is_settled
+    sale.settled_at = settled_at
+    sale.save(update_fields=["is_settled", "settled_at"])
+    if payment is not None:
+        payment.settled_at = settled_at
+        payment.save(update_fields=["settled_at", "updated_at"])
+
+
 def create_sale(payload) -> Sale:
     """Register a sale — cash (complete) or deposit (creates a receipt).
 
@@ -166,14 +199,15 @@ def create_sale(payload) -> Sale:
             notes=clean(payload.get("notes")), invoice_code=manual_invoice,
         )
         if payment_kind == "deposit":
-            Payment.objects.create(
+            payment = Payment.objects.create(
                 sale=sale, product=product, product_name=product.name,
                 customer_name=customer, customer_phone=customer_phone,
                 total_amount=sale_price, paid_amount=paid_now,
                 pay_date=parsed,
-                notes=f"بیعانه فروش #{sale.id} — مانده: "
-                      f"{fa_money(sale_price - paid_now)} تومان",
+                notes=_deposit_note(sale.id, sale_price - paid_now),
             )
+            # a deposit paid in full at creation is already settled
+            _sync_settlement(sale, payment)
         # this watch is sold — it becomes out-of-stock
         Product.objects.filter(id=pid).update(available=False)
 
@@ -184,8 +218,11 @@ def update_sale(sale: Sale, payload) -> Sale:
     """Edit a sale (prices, buyer, methods, date, notes).
 
     Every omitted field falls back to the current value, so PUT and PATCH
-    behave identically.  Changing the sale date re-syncs the deposit
-    receipt's ``pay_date``.
+    behave identically.  The linked deposit receipt is kept in sync with the
+    sale: editing a deposit updates its receipt, switching cash→deposit
+    creates one (an upfront amount is required, as on create), and switching
+    deposit→cash settles the unpaid remainder into ``paid_cash``.  Settlement
+    on the sale and the receipt is re-derived by ``_sync_settlement``.
     """
     payload = _merge_partial(payload, sale, (
         "sale_price", "paid_cash", "paid_pos",
@@ -200,6 +237,7 @@ def update_sale(sale: Sale, payload) -> Sale:
     payment_kind = clean(payload.get("payment_type")) or sale.payment_type
     if payment_kind not in ("cash", "deposit"):
         payment_kind = "cash"
+    was_deposit = sale.payment_type == "deposit"
 
     paid_cash = max(0.0, to_float(payload.get("paid_cash"), sale.paid_cash))
     paid_pos = max(0.0, to_float(payload.get("paid_pos"), sale.paid_pos))
@@ -208,8 +246,17 @@ def update_sale(sale: Sale, payload) -> Sale:
     if paid_now > sale_price + 0.001:
         raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
                             f"({fa_money(sale_price)} تومان)")
+    # cash → deposit needs an upfront amount (same rule as create)
+    if payment_kind == "deposit" and not was_deposit and paid_now <= 0:
+        raise ApiError(400, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
     if paid_now <= 0 and payment_kind == "cash":
+        # a complete cash sale; without a breakdown everything counts as cash
         paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
+        paid_now = sale_price
+    # deposit → cash: the unpaid remainder counts as a cash payment
+    if payment_kind == "cash" and was_deposit and paid_now < sale_price - 0.001:
+        paid_cash += sale_price - paid_now
+        paid_now = sale_price
 
     purchase_price = to_float(payload.get("purchase_price"),
                               product.purchase_price if product else 0)
@@ -228,7 +275,6 @@ def update_sale(sale: Sale, payload) -> Sale:
     sale.sale_price = sale_price
     sale.profit = profit
     sale.notes = clean(payload.get("notes"))
-    old_date = sale.sale_date
     sale.sale_date = parsed
     sale.customer = customer
     sale.customer_phone = customer_phone
@@ -237,10 +283,38 @@ def update_sale(sale: Sale, payload) -> Sale:
     sale.paid_cash = paid_cash
     sale.paid_pos = paid_pos
     sale.paid_card2card = paid_card2card
-    sale.save()
-    # keep the linked deposit receipt's date in sync with the sale date
-    if parsed != old_date:
-        sale.payments.update(pay_date=parsed)
+
+    # the receipt the sale pays in instalments against (deposit sales)
+    receipt_paid = paid_now if payment_kind == "deposit" else sale_price
+    with transaction.atomic():
+        payment = sale.payments.first()
+        if payment is None:
+            if payment_kind == "deposit":
+                # cash → deposit (or a receipt that was deleted): create it
+                payment = Payment.objects.create(
+                    sale=sale, product=product,
+                    product_name=product.name if product else "",
+                    customer_name=customer, customer_phone=customer_phone,
+                    total_amount=sale_price, paid_amount=paid_now,
+                    pay_date=parsed,
+                    notes=_deposit_note(sale.id, sale_price - paid_now),
+                )
+        else:
+            # keep the receipt a faithful mirror of the deposit sale
+            payment.total_amount = sale_price
+            payment.paid_amount = receipt_paid
+            payment.customer_name = customer
+            payment.customer_phone = customer_phone
+            payment.pay_date = parsed
+            if (not payment.notes
+                    or payment.notes.startswith(f"بیعانه فروش #{sale.id}")):
+                payment.notes = _deposit_note(sale.id, sale_price - receipt_paid)
+            payment.save(update_fields=[
+                "total_amount", "paid_amount", "customer_name",
+                "customer_phone", "pay_date", "notes", "updated_at"])
+        sale.save()
+        _sync_settlement(sale, payment)
+
     return sale
 
 
