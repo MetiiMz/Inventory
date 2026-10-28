@@ -144,6 +144,7 @@ $("#payments-grid").addEventListener("click", async (e) => {
     $("#add-pay-info").innerHTML =
       `${esc(p.product_name)} — مانده: <b>${p.remaining_display} تومان</b>`;
     $("#add-pay-amount").value = "";
+    $("#add-pay-method").value = "cash";
     openModal("modal-add-pay");
     return;
   }
@@ -164,7 +165,10 @@ $("#btn-confirm-add-pay").addEventListener("click", async () => {
   const btn = $("#btn-confirm-add-pay");
   btn.disabled = true;
   try {
-    await api(`/api/payments/${addPayId}/add`, { method: "POST", body: { amount } });
+    await api(`/api/payments/${addPayId}/add`, {
+      method: "POST",
+      body: { amount, method: $("#add-pay-method").value },
+    });
     toast("پرداخت ثبت شد");
     closeModal("modal-add-pay");
     loadPayments();

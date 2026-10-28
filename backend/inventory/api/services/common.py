@@ -24,6 +24,12 @@ def _clean_ids(raw_ids):
     return [to_int(i) for i in (raw_ids or []) if to_int(i)]
 
 
+# Sale paid-amount buckets by payment method (cash / POS / card-to-card).
+PAID_METHOD_FIELDS = {
+    "cash": "paid_cash", "pos": "paid_pos", "card2card": "paid_card2card",
+}
+
+
 def _merge_partial(payload, obj, fields):
     """Fill keys missing from a PATCH payload with the object's current values.
 

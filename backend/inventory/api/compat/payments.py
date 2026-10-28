@@ -76,7 +76,7 @@ def api_payment_settle_full(request, payid):
         payment = Payment.objects.filter(id=payid).first()
         if not payment:
             raise ApiError(404, "یافت نشد")
-        services.settle_payment_full(payment)
+        services.settle_payment_full(payment, _body(request))
         return _ok()
     return _guard(run)
 

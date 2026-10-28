@@ -5,7 +5,7 @@ from django.test import TestCase
 from inventory.api import services
 from inventory.api.services import ApiError
 from inventory.models import Payment, Repair, Sale, Tracking
-from tests.helpers import make_product, today_iso
+from tests.helpers import make_product, sale_payload, today_iso
 
 
 def call(fn, *args, **kwargs):
@@ -82,22 +82,16 @@ class PaymentWriteTests(TestCase):
         self.assertIn("یافت نشد", err.message)
 
     def test_update_recomputes_settlement(self):
-        # Sale.product is NOT NULL — create a real product for the sale row
-        product = make_product()
-        sale = Sale.objects.create(
-            product=product, sale_price=1, purchase_price=1, profit=0,
-            sale_date=today_iso(), customer="x", customer_phone="09123456789",
-            is_settled=False)
-        pay = make_payment(sale=sale)
+        # standalone receipts re-derive settlement from their own amounts
+        # (linked receipts reject amount edits — PaymentSaleLinkSyncTests)
+        pay = make_payment(total_amount=1000, paid_amount=100)
         services.update_payment(pay, {"paid_amount": "1000"})
         pay.refresh_from_db()
         self.assertEqual(pay.settled_at, today_iso())
-        self.assertTrue(Sale.objects.get(id=sale.id).is_settled)
 
         services.update_payment(pay, {"paid_amount": "100"})
         pay.refresh_from_db()
         self.assertEqual(pay.settled_at, "")
-        self.assertFalse(Sale.objects.get(id=sale.id).is_settled)
 
     def test_update_validation(self):
         pay = make_payment()
@@ -149,6 +143,115 @@ class PaymentWriteTests(TestCase):
         self.assertEqual(err.status_code, 400)
         n = services.bulk_delete_payments([pays[0].id, str(pays[1].id)])
         self.assertEqual(n, 2)
+
+
+class PaymentSaleLinkSyncTests(TestCase):
+    """A3: receipts linked to a sale keep the sale's paid breakdown and
+    settlement consistent, and can only be removed through their sale."""
+
+    def setUp(self):
+        product = make_product()
+        self.sale = services.create_sale(sale_payload(
+            product.id, payment_type="deposit", sale_price="1500000",
+            paid_cash="500000"))
+        self.pay = Payment.objects.get(sale=self.sale)
+
+    def test_add_instalment_routes_into_method_bucket(self):
+        self.pay = services.add_payment(self.pay, {"amount": "400000",
+                                                   "method": "pos"})
+        self.sale.refresh_from_db()
+        self.pay.refresh_from_db()
+        self.assertEqual(self.pay.paid_amount, 900000)
+        self.assertEqual(self.sale.paid_cash, 500000)
+        self.assertEqual(self.sale.paid_pos, 400000)
+        self.assertEqual(self.sale.paid_card2card, 0)
+        self.assertFalse(self.sale.is_settled)
+
+    def test_add_instalment_defaults_to_cash_and_settles(self):
+        services.add_payment(self.pay, {"amount": "1000000"})
+        self.sale.refresh_from_db()
+        self.pay.refresh_from_db()
+        self.assertEqual(self.sale.paid_cash, 1500000)
+        self.assertTrue(self.sale.is_settled)
+        self.assertEqual(self.sale.settled_at, today_iso())
+        self.assertEqual(self.pay.settled_at, today_iso())
+
+    def test_add_instalment_rejects_overpay(self):
+        _, err = call(services.add_payment, self.pay, {"amount": "2000000"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("مانده", err.message)
+        self.pay.refresh_from_db()
+        self.assertEqual(self.pay.paid_amount, 500000)
+
+    def test_add_instalments_full_pays_settles_both(self):
+        services.add_payment(self.pay, {"amount": "600000", "method": "pos"})
+        services.add_payment(self.pay, {"amount": "400000",
+                                        "method": "card2card"})
+        self.sale.refresh_from_db()
+        self.pay.refresh_from_db()
+        self.assertEqual((self.sale.paid_cash, self.sale.paid_pos,
+                          self.sale.paid_card2card),
+                         (500000.0, 600000.0, 400000.0))
+        self.assertTrue(self.sale.is_settled)
+        self.assertEqual(self.pay.settled_at, today_iso())
+        # A2 invariant still holds
+        self.assertEqual(self.sale.paid_cash + self.sale.paid_pos
+                         + self.sale.paid_card2card, self.pay.paid_amount)
+        self.assertEqual(self.pay.total_amount, self.sale.sale_price)
+
+    def test_settle_full_routes_remainder_into_given_method(self):
+        services.settle_payment_full(self.pay, {"method": "card2card"})
+        self.sale.refresh_from_db()
+        self.pay.refresh_from_db()
+        self.assertEqual(self.pay.paid_amount, 1500000)
+        self.assertEqual(self.sale.paid_cash, 500000)
+        self.assertEqual(self.sale.paid_card2card, 1000000)
+        self.assertTrue(self.sale.is_settled)
+        self.assertEqual(self.sale.settled_at, today_iso())
+
+    def test_update_rejects_amount_edits_on_linked_receipt(self):
+        # amounts of a sale-linked receipt change through the sale or the
+        # instalment entry — never through the receipt's own edit form
+        _, err = call(services.update_payment, self.pay,
+                      {"total_amount": "2000000"})
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("فروش", err.message)
+        _, err = call(services.update_payment, self.pay,
+                      {"paid_amount": "900000"})
+        self.assertEqual(err.status_code, 400)
+        self.pay.refresh_from_db()
+        self.assertEqual(self.pay.paid_amount, 500000)
+        # unchanged amounts in a full-form PUT stay allowed (text edits)
+        services.update_payment(self.pay, {
+            "total_amount": "1500000", "paid_amount": "500000",
+            "customer_name": "مریم"})
+        self.pay.refresh_from_db()
+        self.assertEqual(self.pay.customer_name, "مریم")
+        self.assertEqual(self.pay.paid_amount, 500000)
+
+    def test_delete_linked_receipt_rejected(self):
+        _, err = call(services.delete_payment, self.pay)
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("فروش", err.message)
+        self.assertTrue(Payment.objects.filter(id=self.pay.id).exists())
+        # the deposit sale stays untouched (and unsettled) — no orphan
+        self.sale.refresh_from_db()
+        self.assertFalse(self.sale.is_settled)
+
+    def test_delete_standalone_receipt_still_works(self):
+        standalone = make_payment()
+        services.delete_payment(standalone)
+        self.assertFalse(Payment.objects.filter(id=standalone.id).exists())
+
+    def test_bulk_delete_rejects_linked_receipts_whole(self):
+        standalone = make_payment()
+        _, err = call(services.bulk_delete_payments,
+                      [standalone.id, str(self.pay.id)])
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("فروش", err.message)
+        # all-or-nothing: nothing was deleted
+        self.assertTrue(Payment.objects.filter(id=standalone.id).exists())
+        self.assertTrue(Payment.objects.filter(id=self.pay.id).exists())
 
 
 def make_repair(**overrides):

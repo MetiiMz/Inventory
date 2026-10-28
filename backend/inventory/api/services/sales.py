@@ -97,15 +97,15 @@ def _deposit_note(sale_id: int, remaining: float) -> str:
             f"{fa_money(remaining)} تومان")
 
 
-def _sync_settlement(sale: Sale, payment: Payment | None = None) -> None:
+def _sync_settlement(sale: Sale | None, payment: Payment | None = None) -> None:
     """Derive ``is_settled``/``settled_at`` on the sale (and its receipt).
 
     A balance of ``remaining <= 0.001`` counts as settled: ``settled_at`` is
     stamped with today's date (kept when it is already stamped); any open
     balance clears the stamp.  The linked receipt's ``total/paid`` is the
     source of truth when one is passed, otherwise the sale's own amounts.
-    Must run inside ``transaction.atomic`` — A3 reuses it for the receipt
-    endpoints.
+    Either row may be ``None`` (e.g. a standalone receipt has no sale).
+    Must run inside ``transaction.atomic`` — reused by the payment endpoints.
     """
     if payment is not None:
         remaining = payment.total_amount - payment.paid_amount
@@ -116,9 +116,10 @@ def _sync_settlement(sale: Sale, payment: Payment | None = None) -> None:
         settled_at = sale.settled_at
     is_settled = remaining <= 0.001
     settled_at = (settled_at or today_iso()) if is_settled else ""
-    sale.is_settled = is_settled
-    sale.settled_at = settled_at
-    sale.save(update_fields=["is_settled", "settled_at"])
+    if sale is not None:
+        sale.is_settled = is_settled
+        sale.settled_at = settled_at
+        sale.save(update_fields=["is_settled", "settled_at"])
     if payment is not None:
         payment.settled_at = settled_at
         payment.save(update_fields=["settled_at", "updated_at"])
