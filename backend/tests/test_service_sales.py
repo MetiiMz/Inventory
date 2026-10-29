@@ -550,3 +550,93 @@ class SaleAlreadySoldGuardTests(TestCase):
         self.assertIsNone(err)
         self.assertEqual(Sale.objects.filter(product=p).count(), 1)
         self.assertFalse(Product.objects.get(id=p.id).available)
+
+
+class InvoiceCodePersistenceTests(TestCase):
+    """B1: the auto invoice code is stored at creation and never changes."""
+
+    def test_auto_code_persisted_and_edit_keeps_it(self):
+        p = make_product(office_code="OF-B1", website_code="WS-B1")
+        sale = services.create_sale(sale_payload(p.id, sale_date="2026-09-10"))
+        # 2026-09-10 = ۱۹ شهریور ۱۴۰۵
+        self.assertEqual(sale.invoice_code, f"TT-140506-{sale.id:04d}")
+
+        services.update_sale(sale, {"sale_date": "2026-08-01"})
+        sale.refresh_from_db()
+        self.assertEqual(sale.sale_date, "2026-08-01")
+        # the code must not change when the date is edited
+        self.assertEqual(sale.invoice_code, f"TT-140506-{sale.id:04d}")
+
+    def test_manual_code_stored(self):
+        p = make_product(office_code="OF-B1M", website_code="WS-B1M")
+        sale = services.create_sale(sale_payload(
+            p.id, invoice_code="MY-INV-1"))
+        self.assertEqual(sale.invoice_code, "MY-INV-1")
+        p2 = make_product(office_code="OF-B1M2", website_code="WS-B1M2")
+        _, err = call(services.create_sale, sale_payload(
+            p2.id, invoice_code="MY-INV-1"))
+        self.assertEqual(err.status_code, 400)
+
+    def test_manual_code_matching_stored_auto_code_rejected(self):
+        p = make_product(office_code="OF-B1A", website_code="WS-B1A")
+        auto = services.create_sale(sale_payload(p.id))
+        p2 = make_product(office_code="OF-B1B", website_code="WS-B1B")
+        _, err = call(services.create_sale, sale_payload(
+            p2.id, invoice_code=auto.invoice_code))
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("قبلاً استفاده شده", err.message)
+
+    def test_next_code_preview_uses_the_chosen_date(self):
+        p = make_product(office_code="OF-B1C", website_code="WS-B1C")
+        sale = services.create_sale(sale_payload(p.id, sale_date="2026-09-10"))
+        # next id = last sale id + 1; month comes from the given Jalali date
+        self.assertEqual(services.next_invoice_code("1405/05/01"),
+                         f"TT-140505-{sale.id + 1:04d}")
+        self.assertEqual(services.next_invoice_code("2026-08-01"),
+                         f"TT-140505-{sale.id + 1:04d}")
+        # without a date it falls back to today
+        self.assertTrue(services.next_invoice_code().startswith("TT-"))
+
+    def test_next_code_endpoint_accepts_sale_date_param(self):
+        p = make_product(office_code="OF-B1D", website_code="WS-B1D")
+        sale = services.create_sale(sale_payload(p.id, sale_date="2026-09-10"))
+        r = self.client.get("/api/sales",
+                            {"next_code": 1, "sale_date": "1405/05/01"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["next_invoice_code"],
+                         f"TT-140505-{sale.id + 1:04d}")
+
+    def test_backfill_migration_codes_empty_rows_only(self):
+        import importlib
+
+        from django.apps import apps
+
+        mig = importlib.import_module(
+            "inventory.migrations.0009_backfill_sale_invoice_codes")
+        p = make_product(office_code="OF-B1E", website_code="WS-B1E")
+        old = Sale.objects.create(
+            product=p, sale_price=2000, purchase_price=1000, profit=1000,
+            sale_date="2026-09-10", customer="x", customer_phone="09120000001",
+            paid_cash=2000, payment_type="cash", is_settled=True)  # no code
+        manual = Sale.objects.create(
+            product=p, sale_price=2000, purchase_price=1000, profit=1000,
+            sale_date="2026-09-11", customer="y", customer_phone="09120000002",
+            paid_cash=2000, payment_type="cash", is_settled=True,
+            invoice_code="KEEP-ME")
+        nodate = Sale.objects.create(
+            product=p, sale_price=2000, purchase_price=1000, profit=1000,
+            sale_date="", customer="z", customer_phone="09120000003",
+            paid_cash=2000, payment_type="cash", is_settled=True)
+
+        mig.backfill_sale_codes(apps, None)
+
+        old.refresh_from_db()
+        manual.refresh_from_db()
+        nodate.refresh_from_db()
+        self.assertEqual(old.invoice_code, f"TT-140506-{old.id:04d}")
+        self.assertEqual(manual.invoice_code, "KEEP-ME")
+        self.assertEqual(nodate.invoice_code, f"TT-{nodate.id:04d}")
+        # running it again changes nothing (idempotent)
+        mig.backfill_sale_codes(apps, None)
+        old.refresh_from_db()
+        self.assertEqual(old.invoice_code, f"TT-140506-{old.id:04d}")

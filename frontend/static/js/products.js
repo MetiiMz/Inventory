@@ -301,15 +301,20 @@ function updateSalePaymentFields() {
   updateSaleHints();
 }
 
-/* پیش‌نمایش کد فاکتور زیر فیلد نوع فروش */
+/* پیش‌نمایش کد فاکتور زیر فیلد نوع فروش — با تاریخ انتخابی (B1) */
 async function fetchInvoiceCode() {
   const hint = $("#invoice-code-hint");
   if (!hint) return;
+  const dateInput = $("#sale-form [name='sale_date']");
+  const date = dateInput ? dateInput.value : "";
   try {
-    const res = await api("/api/sales?next_code=1");
+    const res = await api(
+      `/api/sales?next_code=1&sale_date=${encodeURIComponent(date)}`);
     hint.textContent = res.next_invoice_code ? `اگر خالی بگذارید، خودکار صادر می‌شود: ${res.next_invoice_code}` : "";
   } catch { /* پیش‌نمایش کد فاکتور بحرانی نیست */ }
 }
+
+$("#sale-form [name='sale_date']").addEventListener("input", fetchInvoiceCode);
 
 function parseMoneyInput(el) {
   return el ? (+toEnDigits(el.value).replace(/[^\d]/g, "") || 0) : 0;

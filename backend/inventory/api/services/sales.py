@@ -89,10 +89,15 @@ def _validate_buyer(customer, customer_phone):
         raise ApiError(400, "شماره تماس خریدار معتبر نیست (مثال: 09123456789)")
 
 
-def next_invoice_code() -> str:
-    """Preview of the next auto-generated invoice code (TT-<jy><jm>-<id>)."""
+def next_invoice_code(sale_date: str = "") -> str:
+    """Preview of the next auto-generated invoice code (TT-<jy><jm>-<id>).
+
+    ``sale_date`` (Jalali or ISO) comes from the form so the preview
+    matches the code the sale will actually receive (B1).
+    """
     last_id = Sale.objects.order_by("-id").values_list("id", flat=True).first() or 0
-    return invoice_code(last_id + 1, today_iso())
+    iso = parse_jalali_date(sale_date) if sale_date else None
+    return invoice_code(last_id + 1, iso or today_iso())
 
 
 def _deposit_note(sale_id: int, remaining: float) -> str:
@@ -212,6 +217,11 @@ def create_sale(payload) -> Sale:
             paid_card2card=paid_card2card, is_settled=is_settled,
             notes=clean(payload.get("notes")), invoice_code=manual_invoice,
         )
+        if not manual_invoice:
+            # B1: the auto code is persisted at creation so it can never
+            # change when the sale is edited later
+            sale.invoice_code = invoice_code(sale.id, sale.sale_date)
+            sale.save(update_fields=["invoice_code"])
         if payment_kind == "deposit":
             payment = Payment.objects.create(
                 sale=sale, product=product, product_name=product.name,

@@ -21,7 +21,8 @@ def api_sales(request):
 
     if request.GET.get("next_code"):
         return JsonResponse(
-            {"next_invoice_code": services.next_invoice_code()})
+            {"next_invoice_code": services.next_invoice_code(
+                request.GET.get("sale_date") or "")})
 
     rows = list(services.sale_queryset(request.GET)[:500])
     items = [sale_dict(s) for s in rows]
