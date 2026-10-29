@@ -286,3 +286,62 @@ class ImportSoldProtectionTests(TestCase):
         self.assertEqual(stats["added"], 1)
         p = Product.objects.get(office_code="OF-NEW1")
         self.assertFalse(p.available)  # file status honoured for new rows
+
+
+class ImportPurchaseTypeTests(TestCase):
+    """B4: optional «نوع خرید» column — old files without it still import."""
+
+    NEW_HEADER = ["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
+                  "برند", "قیمت خرید", "وضعیت",
+                  "تأمین‌کننده", "تاریخ خرید", "نوع خرید", "یادداشت"]
+
+    def _import(self, header, *rows):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/import.csv"
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(header)
+                writer.writerows(rows)
+            return excel_io.import_products(path)
+
+    def test_old_file_without_column_defaults_to_person(self):
+        old_header = [h for h in self.NEW_HEADER if h != "نوع خرید"]
+        ok, stats, errors = self._import(
+            old_header,
+            ["W1", "REF-PT1", "WS-PT1", "OF-PT1", "", 900,
+             "موجود", "", "", ""])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["added"], 1)
+        p = Product.objects.get(office_code="OF-PT1")
+        self.assertEqual(p.purchase_type, "person")
+
+    def test_online_column_imported(self):
+        ok, stats, errors = self._import(
+            self.NEW_HEADER,
+            ["W2", "REF-PT2", "WS-PT2", "OF-PT2", "", 900,
+             "موجود", "", "", "آنلاین", ""])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["added"], 1)
+        p = Product.objects.get(office_code="OF-PT2")
+        self.assertEqual(p.purchase_type, "online")
+
+    def test_unknown_value_falls_back_to_person(self):
+        ok, stats, errors = self._import(
+            self.NEW_HEADER,
+            ["W3", "REF-PT3", "WS-PT3", "OF-PT3", "", 900,
+             "موجود", "", "", "هرچی", ""])
+        self.assertTrue(ok, errors)
+        p = Product.objects.get(office_code="OF-PT3")
+        self.assertEqual(p.purchase_type, "person")
+
+    def test_export_includes_purchase_type(self):
+        make_product(office_code="OF-PEX", website_code="WS-PEX",
+                     purchase_type="online")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/products.csv"
+            excel_io.export_products(path, "csv")
+            with open(path, encoding="utf-8-sig") as fh:
+                text = fh.read()
+        self.assertIn("نوع خرید", text)
+        self.assertIn("آنلاین", text)
+        self.assertIn("OF-PEX", text)

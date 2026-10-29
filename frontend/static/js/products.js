@@ -87,7 +87,7 @@ function render() {
         ? '<span class="badge green">موجود</span>'
         : '<span class="badge red">ناموجود</span>'}</td>
       <td class="muted">${p.purchase_date_fa || "—"}</td>
-      <td class="muted">${esc(p.supplier) || "—"}</td>
+      <td class="muted">${esc(p.supplier) || "—"}${p.purchase_type === "online" ? ' <span class="badge purple" title="نوع خرید">آنلاین</span>' : ""}</td>
       <td>
         <div class="row-actions">
           <button class="btn btn-sm" data-act="sale" title="ثبت فروش" ${p.is_available ? "" : "disabled"}>
@@ -231,6 +231,8 @@ function openProductModal(p = null) {
   form.querySelector('[name="supplier"]').value = p?.supplier || "";
   form.querySelector('[name="purchase_date"]').value = p?.purchase_date
     ? jFromIso(p.purchase_date) : "";
+  form.querySelector('[name="purchase_type"]').value =
+    p?.purchase_type === "online" ? "online" : "person";  // B4
   form.querySelector('[name="notes"]').value = p?.notes || "";
 
   document.dispatchEvent(new CustomEvent("modal:opened", { detail: { root: $("#modal-product") } }));

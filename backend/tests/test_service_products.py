@@ -162,3 +162,45 @@ class ProductWriteTests(TestCase):
         _, err = call(services.create_product, {"name": ""})
         self.assertEqual(err.status_code, 400)
         self.assertIsInstance(err.message, str)
+
+
+class ProductPurchaseTypeTests(TestCase):
+    """B4: «نوع خرید» is saved, validated, labelled and kept on partial edit."""
+
+    def test_create_defaults_to_person(self):
+        p, err = call(services.create_product, product_payload())
+        self.assertIsNone(err)
+        self.assertEqual(p.purchase_type, "person")
+
+    def test_create_online_and_fa_label(self):
+        from inventory.utils import product_dict
+
+        p, err = call(services.create_product,
+                      product_payload(purchase_type="online"))
+        self.assertIsNone(err)
+        self.assertEqual(p.purchase_type, "online")
+        self.assertEqual(product_dict(p)["purchase_type_fa"], "آنلاین")
+        self.assertEqual(product_dict(p)["purchase_type"], "online")
+
+    def test_invalid_purchase_type_rejected(self):
+        _, err = call(services.create_product,
+                      product_payload(purchase_type="mixed"))
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("نوع خرید", err.message)
+
+    def test_partial_update_keeps_and_changes_purchase_type(self):
+        p = make_product(purchase_type="online")
+        services.update_product(p, {"notes": "x"}, partial=True)
+        p.refresh_from_db()
+        self.assertEqual(p.purchase_type, "online")  # kept when omitted
+        services.update_product(p, {"purchase_type": "person"}, partial=True)
+        p.refresh_from_db()
+        self.assertEqual(p.purchase_type, "person")
+
+    def test_full_update_rejects_invalid_type(self):
+        p = make_product(purchase_type="online")
+        _, err = call(services.update_product, p,
+                      product_payload(purchase_type="whatever"))
+        self.assertEqual(err.status_code, 400)
+        p.refresh_from_db()
+        self.assertEqual(p.purchase_type, "online")

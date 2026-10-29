@@ -12,6 +12,7 @@ IMG_DIR = settings.IMG_DIR
 BACKUP_DIR = settings.BACKUP_DIR
 
 SALE_TYPE_FA = {"person": "حضوری", "online": "آنلاین"}
+PURCHASE_TYPE_FA = {"person": "حضوری", "online": "آنلاین"}
 
 STATUS_FA = {
     "received": "دریافت شده", "in_progress": "در حال تعمیر",
@@ -109,6 +110,7 @@ def product_dict(r):
         "supplier": r.supplier,
         "purchase_date": r.purchase_date,
         "purchase_type": r.purchase_type,
+        "purchase_type_fa": PURCHASE_TYPE_FA.get(r.purchase_type, "حضوری"),
         "notes": r.notes,
         "image": r.image,
         "created_at": str(r.created_at or ""),
