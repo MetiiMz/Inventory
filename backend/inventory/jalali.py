@@ -123,6 +123,9 @@ def parse_jalali_date(text):
             elif a > 1000:  # شمسی
                 if not (1 <= b <= 12) or not (1 <= c <= 31):
                     return None
+                # B3: روز بیشتر از طول همان ماه → None (نه جابه‌جایی به ماه بعد)
+                if c > jalali_month_length(a, b):
+                    return None
                 gy, gm, gd = jalali_to_gregorian(a, b, c)
                 d = datetime.date(gy, gm, gd)
             else:
@@ -133,7 +136,13 @@ def parse_jalali_date(text):
             if n > 19000000:  # میلادی 20240812
                 d = datetime.date(n // 10000, (n // 100) % 100, n % 100)
             else:  # شمسی 14030512
-                gy, gm, gd = jalali_to_gregorian(n // 10000, (n // 100) % 100, n % 100)
+                jy, jm, jd = n // 10000, (n // 100) % 100, n % 100
+                if not (1 <= jm <= 12) or not (1 <= jd <= 31):
+                    return None
+                # B3: روز بیشتر از طول همان ماه → None (نه جابه‌جایی)
+                if jd > jalali_month_length(jy, jm):
+                    return None
+                gy, gm, gd = jalali_to_gregorian(jy, jm, jd)
                 d = datetime.date(gy, gm, gd)
             return d.isoformat()
     except (ValueError, TypeError):

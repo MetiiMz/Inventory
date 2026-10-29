@@ -93,5 +93,25 @@ class ParseJalaliDateTests(TestCase):
                     "1405/06/32", "12/34", "۱"):
             self.assertIsNone(parse_jalali_date(bad), bad)
 
+    def test_invalid_jalali_day_is_not_shifted(self):
+        # B3: Mehr has 30 days and Esfand 29 in 1405 (not a leap year) —
+        # the converter used to shift these into the next month/year
+        self.assertIsNone(parse_jalali_date("1405/07/31"))
+        self.assertIsNone(parse_jalali_date("1405/12/30"))
+        self.assertIsNone(parse_jalali_date("14050731"))
+        self.assertIsNone(parse_jalali_date("14051230"))
+        # month 13 was already rejected in the 3-part branch; now also in
+        # the 8-digit branch, and Gregorian parsing is unchanged
+        self.assertIsNone(parse_jalali_date("1405/13/01"))
+        self.assertIsNone(parse_jalali_date("14051301"))
+        self.assertEqual(parse_jalali_date("2026-09-10"), "2026-09-10")
+
+    def test_valid_month_end_dates(self):
+        # B3: real month boundaries keep working
+        self.assertEqual(parse_jalali_date("1405/07/30"), "2026-10-22")
+        self.assertEqual(parse_jalali_date("1405/06/31"), "2026-09-22")
+        self.assertEqual(parse_jalali_date("1403/12/30"), "2025-03-20")
+        self.assertEqual(parse_jalali_date("14031230"), "2025-03-20")
+
     def test_none_returns_none(self):
         self.assertIsNone(parse_jalali_date(None))
