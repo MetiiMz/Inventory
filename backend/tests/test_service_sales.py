@@ -470,3 +470,83 @@ class SaleCashFullPaymentTests(TestCase):
         legacy.refresh_from_db()
         self.assertEqual(legacy.paid_cash, 2000)
         self.assertTrue(legacy.is_settled)
+
+
+def _legacy_sale(product, customer, phone):
+    """A bare sale row, as created by the old double-sell bug (A7)."""
+    return Sale.objects.create(
+        product=product, sale_price=2000, purchase_price=1000, profit=1000,
+        sale_date=today_iso(), customer=customer, customer_phone=phone,
+        paid_cash=2000, payment_type="cash", is_settled=True)
+
+
+class SaleAlreadySoldGuardTests(TestCase):
+    """A7: a sold watch cannot be sold again (stale tab / direct API call),
+    and deleting one of several legacy sales keeps the watch sold."""
+
+    def test_second_sale_for_sold_product_rejected(self):
+        p = make_product(office_code="OF-G1", website_code="WS-G1")
+        services.create_sale(sale_payload(p.id))
+        _, err = call(services.create_sale, sale_payload(p.id))
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("فروخته شده", err.message)
+        self.assertEqual(Sale.objects.count(), 1)
+        p.refresh_from_db()
+        self.assertFalse(p.available)
+
+    def test_delete_single_sale_restores_stock(self):
+        p = make_product(office_code="OF-G3", website_code="WS-G3")
+        sale = services.create_sale(sale_payload(p.id))
+        services.delete_sale(sale)
+        p.refresh_from_db()
+        self.assertTrue(p.available)
+
+    def test_delete_one_of_two_legacy_sales_keeps_watch_sold(self):
+        p = make_product(office_code="OF-G4", website_code="WS-G4")
+        p.available = False
+        p.save(update_fields=["available"])
+        s1 = _legacy_sale(p, "علی", "09120000001")
+        _legacy_sale(p, "رضا", "09120000002")
+
+        services.delete_sale(s1)
+        p.refresh_from_db()
+        self.assertFalse(p.available)  # the second sale still owns it
+        self.assertEqual(Sale.objects.filter(product=p).count(), 1)
+
+        services.delete_sale(Sale.objects.get(product=p))
+        p.refresh_from_db()
+        self.assertTrue(p.available)
+
+    def test_bulk_delete_frees_only_watches_without_remaining_sales(self):
+        sold_twice = make_product(office_code="OF-G5", website_code="WS-G5")
+        sold_twice.available = False
+        sold_twice.save(update_fields=["available"])
+        s1 = _legacy_sale(sold_twice, "علی", "09120000001")
+        s2 = _legacy_sale(sold_twice, "رضا", "09120000002")
+        once = make_product(office_code="OF-G6", website_code="WS-G6")
+        once.available = False
+        once.save(update_fields=["available"])
+        s3 = _legacy_sale(once, "مریم", "09120000003")
+
+        n = services.bulk_delete_sales([s1.id, s3.id])
+        self.assertEqual(n, 2)
+        sold_twice.refresh_from_db()
+        once.refresh_from_db()
+        self.assertFalse(sold_twice.available)  # s2 still references it
+        self.assertTrue(once.available)
+
+        services.bulk_delete_sales([s2.id])
+        sold_twice.refresh_from_db()
+        self.assertTrue(sold_twice.available)
+
+    def test_watch_becomes_sellable_again_after_deleting_its_sale(self):
+        p = make_product(office_code="OF-G7", website_code="WS-G7")
+        sale = services.create_sale(sale_payload(p.id))
+        _, err = call(services.create_sale, sale_payload(p.id))
+        self.assertEqual(err.status_code, 400)
+
+        services.delete_sale(sale)
+        second, err = call(services.create_sale, sale_payload(p.id))
+        self.assertIsNone(err)
+        self.assertEqual(Sale.objects.filter(product=p).count(), 1)
+        self.assertFalse(Product.objects.get(id=p.id).available)

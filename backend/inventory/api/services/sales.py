@@ -193,9 +193,15 @@ def create_sale(payload) -> Sale:
         payment_kind = "cash"
         is_settled = True
 
-    profit = sale_price - (product.purchase_price or 0)
-
     with transaction.atomic():
+        # A7: lock the row and re-check — a stale tab, a second device or a
+        # direct API call must not double-sell a watch that is already sold
+        product = Product.objects.select_for_update().filter(id=pid).first()
+        if product is None:
+            raise ApiError(404, "محصول یافت نشد")
+        if not product.available:
+            raise ApiError(400, "این ساعت قبلاً فروخته شده است")
+        profit = sale_price - (product.purchase_price or 0)
         sale = Sale.objects.create(
             product=product, sale_price=sale_price,
             purchase_price=product.purchase_price, profit=profit,
@@ -346,18 +352,26 @@ def delete_sale(sale: Sale) -> None:
     pid = sale.product_id
     with transaction.atomic():
         sale.delete()
-        if pid:
+        # A7: the watch stays sold while any other sale still references it
+        # (legacy double-sold rows from before the create_sale guard)
+        if pid and not Sale.objects.filter(product_id=pid).exists():
             Product.objects.filter(id=pid).update(available=True)
 
 
 def bulk_delete_sales(raw_ids) -> int:
-    """Bulk-delete sales; every affected watch becomes available again."""
+    """Bulk-delete sales; every watch with no remaining sale becomes
+    available again."""
     ids = _clean_ids(raw_ids)
     if not ids:
         raise ApiError(400, "موردی انتخاب نشده است")
     with transaction.atomic():
-        Product.objects.filter(
-            id__in=Sale.objects.filter(id__in=ids).values("product_id")
-        ).update(available=True)
+        pids = set(Sale.objects.filter(id__in=ids)
+                   .values_list("product_id", flat=True))
         Sale.objects.filter(id__in=ids).delete()
+        # A7: watches still referenced by another sale stay sold
+        still_sold = set(Sale.objects.filter(product_id__in=pids)
+                         .values_list("product_id", flat=True))
+        free = pids - still_sold
+        if free:
+            Product.objects.filter(id__in=free).update(available=True)
     return len(ids)
