@@ -126,6 +126,23 @@ class CompatSaleContractTests(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(r.json()["sale"]["sale_price"], 1500000)
 
+    def test_summary_covers_all_sales_beyond_500(self):
+        # B2: the summary used to describe only the first 500 rows
+        p = make_product()
+        Sale.objects.bulk_create([
+            Sale(product=p, sale_price=1000 + i, purchase_price=500,
+                 profit=500 + i, sale_date="2026-09-10", customer="x",
+                 customer_phone="09120000001", paid_cash=1000 + i,
+                 payment_type="cash", is_settled=True)
+            for i in range(600)])
+        body = self.client.get("/api/sales").json()
+        self.assertEqual(body["summary"]["count"], 600)
+        self.assertEqual(len(body["items"]), 600)
+        self.assertEqual(body["summary"]["total_sale"],
+                         sum(1000 + i for i in range(600)))
+        self.assertEqual(body["summary"]["total_profit"],
+                         sum(500 + i for i in range(600)))
+
 
 class CompatPaymentContractTests(TestCase):
     """Legacy /api/payments — ok() envelope with items+summary."""

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Sale adapters: list/detail/bulk-delete over the legacy /api/sales contract."""
 
+from django.db.models import Count, Sum
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -12,7 +13,11 @@ from .common import _body, _ok, _fail, _guard
 
 
 def api_sales(request):
-    """GET lists sales with a summary; POST creates a sale."""
+    """GET lists sales with a summary; POST creates a sale.
+
+    The summary is aggregated over the whole filtered queryset (B2) —
+    the response used to cap at 500 rows and describe only those.
+    """
     if request.method == "POST":
         def run():
             sale = services.create_sale(_body(request))
@@ -24,13 +29,18 @@ def api_sales(request):
             {"next_invoice_code": services.next_invoice_code(
                 request.GET.get("sale_date") or "")})
 
-    rows = list(services.sale_queryset(request.GET)[:500])
-    items = [sale_dict(s) for s in rows]
+    qs = services.sale_queryset(request.GET)
+    agg = qs.aggregate(
+        count=Count("id"),
+        total_sale=Sum("sale_price"),
+        total_profit=Sum("profit"),
+    )
     summary = {
-        "count": len(items),
-        "total_sale": sum(x.get("sale_price") or 0 for x in items),
-        "total_profit": sum(x.get("profit") or 0 for x in items),
+        "count": agg["count"] or 0,
+        "total_sale": agg["total_sale"] or 0,
+        "total_profit": agg["total_profit"] or 0,
     }
+    items = [sale_dict(s) for s in qs]
     return JsonResponse({"items": items, "summary": summary})
 
 
