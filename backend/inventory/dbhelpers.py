@@ -5,6 +5,8 @@ import os
 import sqlite3
 
 from django.conf import settings
+from django.core.management import call_command
+from django.db import connections
 
 from inventory.models import Setting
 
@@ -84,19 +86,39 @@ def list_backups():
 
 
 def restore_db(filename):
-    """بازگردانی نسخه‌ی پشتیبان. ابتدا از وضعیت فعلی یک بکاپ می‌گیرد."""
+    """بازگردانی نسخه‌ی پشتیبان. ابتدا از وضعیت فعلی یک بکاپ می‌گیرد.
+
+    بعد از کپی فایل، مهاجرت‌های Django هم اجرا می‌شوند — نسخه‌ی پشتیبان
+    ممکن است ساختار قدیمی داشته باشد و بدون migrate، کوئری‌ها (فروش و
+    پرداخت) و ثبت محصول خطا می‌دهند (A5).
+    """
     safe = os.path.basename(filename or "")
     target = os.path.join(BACKUP_DIR, safe)
     if not os.path.isfile(target):
         return False, "فایل نسخه‌ی پشتیبان یافت نشد"
-    backup_db("pre_restore_" + _stamp() + ".db")
-    src = sqlite3.connect(target)
-    dst = sqlite3.connect(DB_PATH)
-    with dst:
-        src.backup(dst)
-    dst.close()
-    src.close()
-    _ensure_schema()
+    pre_name = "pre_restore_" + _stamp() + ".db"
+    connections.close_all()
+    backup_db(pre_name)
+    try:
+        src = sqlite3.connect(target)
+        dst = sqlite3.connect(DB_PATH)
+        with dst:
+            src.backup(dst)
+        dst.close()
+        src.close()
+        _ensure_schema()
+    except Exception:
+        return False, ("بازگردانی نسخه‌ی پشتیبان ناموفق بود؛ فایل آسیب‌دیده یا "
+                       "ناسازگار است — از نسخه‌ی پشتیبان خودکار "
+                       f"«{pre_name}» برای بازگشت به وضعیت قبل استفاده کنید")
+    # اتصال‌های ORM وضعیت قدیمی را در حافظه دارند — ببند تا از فایل تازه بخوانند
+    connections.close_all()
+    try:
+        call_command("migrate", verbosity=0, interactive=False)
+    except Exception:
+        return False, ("بازگردانی انجام شد اما به‌روزرسانی ساختار پایگاه‌داده "
+                       f"ناموفق بود؛ از نسخه‌ی پشتیبان خودکار «{pre_name}» "
+                       "برای بازگشت به وضعیت قبل استفاده کنید")
     return True, ""
 
 
