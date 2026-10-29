@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for calendar services, uploads and Excel export/import."""
 import base64
+import csv
 import datetime
 import tempfile
 from unittest import mock
@@ -10,9 +11,10 @@ from django.test import TestCase, override_settings
 
 from inventory.api import services
 from inventory.api.services import ApiError
+from inventory import excel_io
 from inventory.models import Product, Repair, Sale
 from inventory.utils import fa_money
-from tests.helpers import make_product, today_iso
+from tests.helpers import make_product, sale_payload, today_iso
 
 
 def call(fn, *args, **kwargs):
@@ -223,3 +225,64 @@ class ExportImportTests(TestCase):
         self.assertEqual(p.notes, "note")
         # the legacy price column must not leak onto the product
         self.assertNotEqual(getattr(p, "sale_price", 0) or 0, 3000)
+
+
+class ImportSoldProtectionTests(TestCase):
+    """A6: an import file must not resurrect a sold watch."""
+
+    HEADER = ["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
+              "برند", "قیمت خرید", "وضعیت",
+              "تأمین‌کننده", "تاریخ خرید", "یادداشت"]
+
+    def _import(self, *rows):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = f"{tmp}/import.csv"
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(self.HEADER)
+                writer.writerows(rows)
+            return excel_io.import_products(path)
+
+    def test_file_saying_available_cannot_resurrect_sold_watch(self):
+        p = make_product(office_code="OF-SOLD", website_code="WS-SOLD",
+                         brand="OldBrand")
+        services.create_sale(sale_payload(p.id))
+        p.refresh_from_db()
+        self.assertFalse(p.available)  # sold
+
+        ok, stats, errors = self._import(
+            ["Test Watch", "REF-S", "WS-SOLD", "OF-SOLD", "NewBrand",
+             1200, "موجود", "sup", "1405/06/19", "edited"])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["updated"], 1, errors)
+        p.refresh_from_db()
+        self.assertFalse(p.available)  # still sold — the fix
+        # the rest of the row is really applied (it was an update, not skip)
+        self.assertEqual(p.brand, "NewBrand")
+        self.assertEqual(p.notes, "edited")
+
+    def test_existing_lookup_is_case_insensitive(self):
+        p = make_product(office_code="OF-CASE", website_code="WS-CASE")
+        p.available = False
+        p.save(update_fields=["available"])
+
+        ok, stats, errors = self._import(
+            ["Test Watch", "REF-C", "ws-case", "of-case", "",
+             900, "موجود", "", "", ""])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["updated"], 1, errors)
+        self.assertEqual(stats["added"], 0)
+        self.assertEqual(Product.objects.count(), 1)
+        p.refresh_from_db()
+        # the row matched case-insensitively and was updated in place
+        self.assertEqual(p.office_code, "of-case")
+        self.assertFalse(p.available)  # never touched on update
+
+    def test_new_row_still_uses_file_status(self):
+        ok, stats, errors = self._import(
+            ["New Watch", "REF-N", "WS-NEW1", "OF-NEW1", "",
+             900, "ناموجود", "", "", ""])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["added"], 1)
+        p = Product.objects.get(office_code="OF-NEW1")
+        self.assertFalse(p.available)  # file status honoured for new rows

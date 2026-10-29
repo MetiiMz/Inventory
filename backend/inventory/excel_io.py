@@ -4,6 +4,7 @@ import csv
 import io
 import os
 
+from django.db.models import Q
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -352,14 +353,18 @@ def import_products(filepath, update_existing=True):
                 "notes": str(rec.get("notes") or "").strip(),
             }
 
+            # A6: same duplicate rule as create_product (case-insensitive)
             existing = Product.objects.filter(
-                office_code=office_code).first() or Product.objects.filter(
-                website_code=website_code).first()
+                Q(office_code__iexact=office_code)
+                | Q(website_code__iexact=website_code)).first()
 
             if existing:
                 if update_existing:
+                    # A6: sold state is owned by sales — the file's status
+                    # must never resurrect a sold watch (new rows may use it)
                     for k, v in values.items():
-                        setattr(existing, k, v)
+                        if k != "available":
+                            setattr(existing, k, v)
                     existing.save()
                     stats["updated"] += 1
                 else:
