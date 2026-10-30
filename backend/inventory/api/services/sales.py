@@ -223,7 +223,15 @@ def create_sale(payload) -> Sale:
         if not manual_invoice:
             # B1: the auto code is persisted at creation so it can never
             # change when the sale is edited later
-            sale.invoice_code = invoice_code(sale.id, sale.sale_date)
+            code = invoice_code(sale.id, sale.sale_date)
+            # F3: a manual entry may already own this month's slot for this
+            # id — append a numeric suffix until the code is unique
+            candidate, n = code, 1
+            while (Sale.objects.exclude(id=sale.id)
+                   .filter(invoice_code=candidate).exists()):
+                n += 1
+                candidate = f"{code}-{n}"
+            sale.invoice_code = candidate
             sale.save(update_fields=["invoice_code"])
         if payment_kind == "deposit":
             payment = Payment.objects.create(

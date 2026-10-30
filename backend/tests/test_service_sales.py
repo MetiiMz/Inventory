@@ -612,6 +612,27 @@ class InvoiceCodePersistenceTests(TestCase):
         self.assertEqual(err.status_code, 400)
         self.assertIn("قبلاً استفاده شده", err.message)
 
+    def test_auto_code_suffixed_when_a_manual_code_took_the_slot(self):
+        # F3: sale A (created earlier) holds a manual code equal to what a
+        # later sale in the same month computes for itself — the auto code
+        # gets a numeric suffix instead of duplicating
+        p1 = make_product(office_code="OF-F3A", website_code="WS-F3A")
+        a = services.create_sale(sale_payload(p1.id, sale_date="2026-09-10"))
+        # sale C will get id a.id + 2; sale B claims that code manually
+        # (legal at creation time — no sale owns it yet)
+        taken_code = f"TT-140506-{a.id + 2:04d}"
+        p2 = make_product(office_code="OF-F3B", website_code="WS-F3B")
+        b = services.create_sale(sale_payload(
+            p2.id, sale_date="2026-09-10", invoice_code=taken_code))
+        self.assertEqual(b.invoice_code, taken_code)
+        p3 = make_product(office_code="OF-F3C", website_code="WS-F3C")
+        c = services.create_sale(sale_payload(p3.id, sale_date="2026-09-10"))
+        # c.id == a.id + 2 → its natural code is taken → "-2"
+        self.assertEqual(c.id, a.id + 2)
+        self.assertEqual(c.invoice_code, f"{taken_code}-2")
+        codes = list(Sale.objects.values_list("invoice_code", flat=True))
+        self.assertEqual(len(codes), len(set(codes)))  # all unique
+
     def test_next_code_preview_uses_the_chosen_date(self):
         p = make_product(office_code="OF-B1C", website_code="WS-B1C")
         sale = services.create_sale(sale_payload(p.id, sale_date="2026-09-10"))
