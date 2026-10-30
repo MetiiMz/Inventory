@@ -12,8 +12,13 @@ from inventory.models import Payment, Product, Repair, Sale, Tracking
 
 
 def get_dashboard_stats():
+    # B6: the purchase-value box describes the in-stock inventory only —
+    # sold watches no longer count toward it (consistent with the brand
+    # table, which also counts available watches)
     prod = Product.objects.aggregate(
-        total_purchase_value=Coalesce(Sum("purchase_price"), Value(0.0), output_field=FloatField()),
+        total_purchase_value=Coalesce(
+            Sum("purchase_price", filter=Q(available=True)),
+            Value(0.0), output_field=FloatField()),
         available_count=Count("id", filter=Q(available=True)),
         product_count=Count("id"),
     )

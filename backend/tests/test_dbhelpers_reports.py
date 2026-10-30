@@ -203,7 +203,9 @@ class ReportTests(TestCase):
         self.assertNotIn("total_profit_value", stats)
         self.assertEqual(stats["product_count"], 2)
         self.assertEqual(stats["available_count"], 1)
-        self.assertEqual(stats["total_purchase_value"], 1500)
+        # B6: sold watches no longer count toward the purchase value —
+        # only the in-stock inventory does
+        self.assertEqual(stats["total_purchase_value"], 1000)
 
     def test_dashboard_sales_boxes_are_current_jalali_year(self):
         # one sale this Jalali year, one in an earlier Jalali year
