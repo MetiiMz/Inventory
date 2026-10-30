@@ -314,6 +314,32 @@ class SaleDepositReceiptSyncTests(TestCase):
         self.assertEqual(cash_sale.payment_type, "cash")
         self.assertFalse(Payment.objects.filter(sale=cash_sale).exists())
 
+    def test_stay_deposit_edit_with_zero_paid_rejected(self):
+        # F1: editing a deposit sale to zero paid used to pass and wipe the
+        # receipt's paid_amount — same rejection as on create now
+        dep_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-Z1", website_code="WS-Z1").id,
+            payment_type="deposit", paid_cash="500000"))
+        receipt = Payment.objects.get(sale=dep_sale)
+        _, err = call(services.update_sale, dep_sale, {
+            "paid_cash": "0", "paid_pos": "0", "paid_card2card": "0"})
+        self.assertEqual(err.status_code, 400)
+        self.assertEqual(err.message, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
+        dep_sale.refresh_from_db()
+        self.assertEqual(dep_sale.paid_cash, 500000)
+        self.assertFalse(dep_sale.is_settled)
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.paid_amount, 500000)
+
+    def test_stay_deposit_edit_without_paid_fields_keeps_amount(self):
+        # F1: omitting the paid fields still falls back to stored values
+        dep_sale = services.create_sale(sale_payload(
+            make_product(office_code="OF-Z2", website_code="WS-Z2").id,
+            payment_type="deposit", paid_cash="500000"))
+        services.update_sale(dep_sale, {"notes": "edit"})
+        dep_sale.refresh_from_db()
+        self.assertEqual(dep_sale.paid_cash, 500000)
+
     def test_cash_to_deposit_creates_receipt(self):
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-C3", website_code="WS-C3").id))

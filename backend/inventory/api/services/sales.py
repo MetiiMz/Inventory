@@ -30,6 +30,9 @@ _SALE_NOCASE = {"product__name", "product__office_code", "customer"}
 _CASH_PARTIAL_MSG = ("برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ "
                      "برای پرداخت ناقص «بیعانه» را انتخاب کنید")
 
+# F1: a deposit needs an upfront amount — same rule on create and edit
+_DEPOSIT_MIN_MSG = "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید"
+
 
 def sale_queryset(params) -> QuerySet:
     """Filtered/ordered sale list.
@@ -180,7 +183,7 @@ def create_sale(payload) -> Sale:
 
     if payment_kind == "deposit":
         if paid_now <= 0:
-            raise ApiError(400, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
+            raise ApiError(400, _DEPOSIT_MIN_MSG)
         if paid_now > sale_price + 0.001:
             raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
                                 f"({fa_money(sale_price)} تومان)")
@@ -270,9 +273,11 @@ def update_sale(sale: Sale, payload) -> Sale:
     if paid_now > sale_price + 0.001:
         raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
                             f"({fa_money(sale_price)} تومان)")
-    # cash → deposit needs an upfront amount (same rule as create)
-    if payment_kind == "deposit" and not was_deposit and paid_now <= 0:
-        raise ApiError(400, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
+    # a deposit sale must keep an upfront amount — same rule as create
+    # (F1: this used to fire only on cash→deposit, so editing a deposit
+    # to zero paid produced a receipt with paid_amount 0)
+    if payment_kind == "deposit" and paid_now <= 0:
+        raise ApiError(400, _DEPOSIT_MIN_MSG)
     if paid_now <= 0 and payment_kind == "cash":
         # a complete cash sale; without a breakdown everything counts as cash
         paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
