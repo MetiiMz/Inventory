@@ -46,14 +46,11 @@ function render() {
   /* چیپ‌های خلاصه */
   const availableCount = allProducts.filter((p) => p.is_available).length;
   const totalVal = allProducts.reduce((s, p) => s + p.total_value, 0);
-  const totalSaleVal = allProducts.reduce((s, p) => s + p.total_sale_value, 0);
   $("#summary-chips").innerHTML =
     `<span class="chip active plain" style="cursor:default">${faNum(allProducts.length)} مدل</span>` +
     `<span class="chip plain" style="cursor:default">${faNum(availableCount)} موجود</span>` +
     `<span class="chip plain" style="cursor:default">${faNum(allProducts.length - availableCount)} ناموجود</span>` +
-    `<span class="chip plain" style="cursor:default">خرید: ${faMoney(totalVal)}</span>` +
-    `<span class="chip plain" style="cursor:default">فروش: ${faMoney(totalSaleVal)}</span>` +
-    `<span class="chip plain" style="cursor:default">سود بالقوه: ${faMoney(totalSaleVal - totalVal)}</span>`;
+    `<span class="chip plain" style="cursor:default">خرید: ${faMoney(totalVal)}</span>`;
 
   if (!list.length) {
     body.innerHTML = "";

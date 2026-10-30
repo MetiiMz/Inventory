@@ -8,7 +8,7 @@ let paymentsData = { items: [], summary: {} };
 let currentPayStatus = "";
 let deletingPaymentId = null;
 let addPayId = null;
-let selectedProduct = null; // {id, name, sale_price}
+let selectedProduct = null; // {id, name}
 let allProductsCache = [];
 const selectedPayIds = new Set();
 
@@ -320,9 +320,9 @@ $("#payment-product-search").addEventListener("input", (e) => {
       }
       box.innerHTML = top.map((p) => `
         <button type="button" class="menu-item prod-pick" data-id="${p.id}"
-                data-name="${esc(p.name)}" data-price="${p.sale_price}">
+                data-name="${esc(p.name)}">
           <span class="p-name">${esc(p.name)}</span>
-          <span class="li-sub" style="margin-inline-start:auto">${esc(p.office_code)}${p.sale_price ? " — " + p.sale_price_display : ""}</span>
+          <span class="li-sub" style="margin-inline-start:auto">${esc(p.office_code)}</span>
         </button>`).join("");
       box.classList.remove("hidden");
     } catch { /* بی‌اهمیت */ }
@@ -335,13 +335,9 @@ $("#payment-product-results").addEventListener("click", (e) => {
   selectedProduct = {
     id: +pick.dataset.id,
     name: pick.dataset.name,
-    price: +pick.dataset.price || 0,
   };
   const form = $("#payment-form");
   form.querySelector('[name="product_name"]').value = selectedProduct.name;
-  if (selectedProduct.price && !form.querySelector('[name="total_amount"]').value) {
-    form.querySelector('[name="total_amount"]').value = money(selectedProduct.price);
-  }
   $("#payment-product-hint").textContent = `انتخاب شد: ${selectedProduct.name}`;
   $("#payment-product-results").classList.add("hidden");
   $("#payment-product-search").value = selectedProduct.name;
