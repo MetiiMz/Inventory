@@ -2,14 +2,14 @@
   "version": "1.0.7.dev0",
   "integration_state_schema": 1,
   "installed_integrations": [
-    "cline"
+    "opencode"
   ],
   "integration_settings": {
-    "cline": {
+    "opencode": {
       "script": "sh",
-      "invoke_separator": "-"
+      "invoke_separator": "."
     }
   },
-  "integration": "cline",
-  "default_integration": "cline"
+  "integration": "opencode",
+  "default_integration": "opencode"
 }
