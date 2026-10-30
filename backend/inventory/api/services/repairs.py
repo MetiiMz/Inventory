@@ -117,7 +117,11 @@ def bulk_delete_repairs(raw_ids) -> int:
 
 
 def set_repair_status(repair: Repair, payload) -> Repair:
-    """Change a repair's status; ``delivered`` stamps ``return_date``."""
+    """Change a repair's status; ``delivered`` stamps ``return_date``.
+
+    Re-opening a delivered repair (any other status, no explicit return
+    date) clears the stale return date (B7).
+    """
     status = clean(payload.get("status"))
     if status not in STATUS_FA:
         raise ApiError(400, "وضعیت نامعتبر است")
@@ -129,7 +133,6 @@ def set_repair_status(repair: Repair, payload) -> Repair:
     else:
         parsed = ""
     repair.status = status
-    if parsed:
-        repair.return_date = parsed
+    repair.return_date = parsed if parsed else ""
     repair.save()
     return repair

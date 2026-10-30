@@ -316,6 +316,13 @@ class RepairServiceTests(TestCase):
         self.assertEqual(repair.return_date, "")
         repair = services.set_repair_status(repair, {"status": "delivered"})
         self.assertEqual(repair.return_date, today_iso())
+        # B7: reopening a delivered repair clears the stale return date
+        repair = services.set_repair_status(repair, {"status": "in_progress"})
+        self.assertEqual(repair.return_date, "")
+        # an explicit return date still wins over the status default
+        repair = services.set_repair_status(
+            repair, {"status": "delivered", "return_date": "2026-01-05"})
+        self.assertEqual(repair.return_date, "2026-01-05")
 
     def test_set_status_validation(self):
         repair = make_repair()
