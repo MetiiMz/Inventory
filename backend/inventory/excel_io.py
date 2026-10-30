@@ -370,11 +370,15 @@ def import_products(filepath, update_existing=True):
 
             if existing:
                 if update_existing:
-                    # A6: sold state is owned by sales — the file's status
-                    # must never resurrect a sold watch (new rows may use it)
+                    # A6: sold state is owned by sales — never overwrite it
+                    # F2: «نوع خرید» is applied only when the file actually
+                    # has that column; old exports leave it untouched
                     for k, v in values.items():
-                        if k != "available":
-                            setattr(existing, k, v)
+                        if k == "available":
+                            continue
+                        if k == "purchase_type" and "purchase_type" not in col_idx:
+                            continue
+                        setattr(existing, k, v)
                     existing.save()
                     stats["updated"] += 1
                 else:

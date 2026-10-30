@@ -334,6 +334,35 @@ class ImportPurchaseTypeTests(TestCase):
         p = Product.objects.get(office_code="OF-PT3")
         self.assertEqual(p.purchase_type, "person")
 
+    def test_old_file_update_leaves_existing_purchase_type(self):
+        # F2: updating an existing product from an old-format file (no
+        # «نوع خرید» column) must not reset its purchase type
+        make_product(office_code="OF-PT4", website_code="WS-PT4",
+                     purchase_type="online")
+        old_header = [h for h in self.NEW_HEADER if h != "نوع خرید"]
+        ok, stats, errors = self._import(
+            old_header,
+            ["W4", "REF-PT4", "ws-pt4", "of-pt4", "", 900,
+             "موجود", "", "", "edited"])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["updated"], 1)
+        # the file's codes are applied like any other field (lowercase here)
+        p = Product.objects.get(office_code="of-pt4")
+        self.assertEqual(p.purchase_type, "online")
+        self.assertEqual(p.notes, "edited")  # the update really happened
+
+    def test_new_file_update_applies_purchase_type(self):
+        # the column present means the value is authoritative on update
+        make_product(office_code="OF-PT5", website_code="WS-PT5")
+        ok, stats, errors = self._import(
+            self.NEW_HEADER,
+            ["W5", "REF-PT5", "WS-PT5", "OF-PT5", "", 900,
+             "موجود", "", "", "آنلاین", ""])
+        self.assertTrue(ok, errors)
+        self.assertEqual(stats["updated"], 1)
+        p = Product.objects.get(office_code="OF-PT5")
+        self.assertEqual(p.purchase_type, "online")
+
     def test_export_includes_purchase_type(self):
         make_product(office_code="OF-PEX", website_code="WS-PEX",
                      purchase_type="online")
