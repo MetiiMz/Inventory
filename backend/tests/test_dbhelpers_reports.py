@@ -97,7 +97,7 @@ class ClearDatabaseTests(TestCase):
                 brand varchar(100) NOT NULL, purchase_price REAL NOT NULL,
                 sale_price REAL NOT NULL, available BOOL NOT NULL,
                 supplier varchar(200) NOT NULL, purchase_date varchar(10) NOT NULL,
-                purchase_type varchar(20) NOT NULL, notes TEXT NOT NULL,
+                notes TEXT NOT NULL,
                 image varchar(255) NOT NULL, created_at datetime NOT NULL,
                 updated_at datetime NOT NULL);
             CREATE TABLE settings (
@@ -107,8 +107,8 @@ class ClearDatabaseTests(TestCase):
         conn.execute(
             "INSERT INTO products (name, reference, office_code, website_code,"
             " brand, purchase_price, sale_price, available, supplier,"
-            " purchase_date, purchase_type, notes, image, created_at, updated_at)"
-            " VALUES ('w', '', 'OF-1', 'WS-1', '', 1, 2, 1, '', '', 'person',"
+            " purchase_date, notes, image, created_at, updated_at)"
+            " VALUES ('w', '', 'OF-1', 'WS-1', '', 1, 2, 1, '', '',"
             " '', '', '2026-01-01', '2026-01-01')")
         conn.execute("INSERT INTO settings (key, value) VALUES ('store_name', 'تیک')")
         conn.commit()
@@ -131,8 +131,8 @@ class ClearDatabaseTests(TestCase):
             conn.execute(
                 "INSERT INTO products (name, reference, office_code, website_code,"
                 " brand, purchase_price, sale_price, available, supplier,"
-                " purchase_date, purchase_type, notes, image, created_at, updated_at)"
-                " VALUES ('w2', '', 'OF-2', 'WS-2', '', 1, 2, 1, '', '', 'person',"
+                " purchase_date, notes, image, created_at, updated_at)"
+                " VALUES ('w2', '', 'OF-2', 'WS-2', '', 1, 2, 1, '', '',"
                 " '', '', '2026-01-02', '2026-01-02')")
             new_id = conn.execute(
                 "SELECT id FROM products WHERE name='w2'").fetchone()[0]

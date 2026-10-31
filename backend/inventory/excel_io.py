@@ -12,18 +12,18 @@ from openpyxl.utils import get_column_letter
 from inventory.jalali import gregorian_to_jalali, parse_jalali_date
 from inventory.models import Payment, Product, Repair, Sale, Tracking
 from inventory.utils import (
-    PURCHASE_TYPE_FA, STATUS_FA, TRACKING_STATUS_FA,
+    STATUS_FA, TRACKING_STATUS_FA,
 )
 
 PRODUCT_HEADERS = [
     "نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
     "برند", "قیمت خرید", "وضعیت",
-    "تأمین‌کننده", "تاریخ خرید", "نوع خرید", "یادداشت",
+    "تأمین‌کننده", "تاریخ خرید", "یادداشت",
 ]
 PRODUCT_FIELDS = [
     "name", "reference", "website_code", "office_code", "brand",
     "purchase_price", "available", "supplier",
-    "purchase_date", "purchase_type", "notes",
+    "purchase_date", "notes",
 ]
 
 REPAIR_HEADERS = [
@@ -207,7 +207,6 @@ def _product_rows():
             r.brand, _money(r.purchase_price),
             "موجود" if r.available else "ناموجود",
             r.supplier, _jdate_from_iso(r.purchase_date),
-            PURCHASE_TYPE_FA.get(r.purchase_type, "حضوری"),
             r.notes,
         ])
     return rows
@@ -343,12 +342,6 @@ def import_products(filepath, update_existing=True):
 
             purchase_date = parse_jalali_date(rec.get("purchase_date")) or ""
 
-            # B4: نوع خرید — «آنلاین» / online؛ فایل‌های قدیمی بدون این
-            # ستون یا با مقدار نامعلوم → حضوری
-            raw_ptype = str(rec.get("purchase_type") or "").strip()
-            purchase_type = "online" if raw_ptype in ("آنلاین", "online") \
-                else "person"
-
             values = {
                 "name": name,
                 "reference": str(rec.get("reference") or "").strip(),
@@ -359,7 +352,6 @@ def import_products(filepath, update_existing=True):
                 "available": available,
                 "supplier": str(rec.get("supplier") or "").strip(),
                 "purchase_date": purchase_date,
-                "purchase_type": purchase_type,
                 "notes": str(rec.get("notes") or "").strip(),
             }
 
@@ -371,12 +363,8 @@ def import_products(filepath, update_existing=True):
             if existing:
                 if update_existing:
                     # A6: sold state is owned by sales — never overwrite it
-                    # F2: «نوع خرید» is applied only when the file actually
-                    # has that column; old exports leave it untouched
                     for k, v in values.items():
                         if k == "available":
-                            continue
-                        if k == "purchase_type" and "purchase_type" not in col_idx:
                             continue
                         setattr(existing, k, v)
                     existing.save()

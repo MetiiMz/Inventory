@@ -288,12 +288,13 @@ class ImportSoldProtectionTests(TestCase):
         self.assertFalse(p.available)  # file status honoured for new rows
 
 
-class ImportPurchaseTypeTests(TestCase):
-    """B4: optional «نوع خرید» column — old files without it still import."""
+class ImportLegacyPurchaseTypeColumnTests(TestCase):
+    """G1: «نوع خرید» is gone from products — but old files that still
+    carry the column must import fine (extra columns are ignored)."""
 
-    NEW_HEADER = ["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
-                  "برند", "قیمت خرید", "وضعیت",
-                  "تأمین‌کننده", "تاریخ خرید", "نوع خرید", "یادداشت"]
+    LEGACY_HEADER = ["نام ساعت", "رفرنس", "کد انبار سایت", "کد دفتر فروشگاه",
+                     "برند", "قیمت خرید", "وضعیت",
+                     "تأمین‌کننده", "تاریخ خرید", "نوع خرید", "یادداشت"]
 
     def _import(self, header, *rows):
         with tempfile.TemporaryDirectory() as tmp:
@@ -304,73 +305,38 @@ class ImportPurchaseTypeTests(TestCase):
                 writer.writerows(rows)
             return excel_io.import_products(path)
 
-    def test_old_file_without_column_defaults_to_person(self):
-        old_header = [h for h in self.NEW_HEADER if h != "نوع خرید"]
+    def test_legacy_file_with_purchase_type_column_imports(self):
         ok, stats, errors = self._import(
-            old_header,
-            ["W1", "REF-PT1", "WS-PT1", "OF-PT1", "", 900,
-             "موجود", "", "", ""])
+            self.LEGACY_HEADER,
+            ["W1", "R1", "WS-G1", "OF-G1", "", 900,
+             "موجود", "", "", "آنلاین", "legacy notes"])
         self.assertTrue(ok, errors)
         self.assertEqual(stats["added"], 1)
-        p = Product.objects.get(office_code="OF-PT1")
-        self.assertEqual(p.purchase_type, "person")
+        p = Product.objects.get(office_code="OF-G1")
+        self.assertEqual(p.name, "W1")
+        self.assertEqual(p.notes, "legacy notes")
+        self.assertEqual(list(errors), [])
 
-    def test_online_column_imported(self):
+    def test_legacy_file_update_ignores_purchase_type(self):
+        # updating an existing product from an old-format file: the extra
+        # column must not break the row (its value is just dropped)
+        make_product(office_code="OF-GU", website_code="WS-GU")
         ok, stats, errors = self._import(
-            self.NEW_HEADER,
-            ["W2", "REF-PT2", "WS-PT2", "OF-PT2", "", 900,
-             "موجود", "", "", "آنلاین", ""])
-        self.assertTrue(ok, errors)
-        self.assertEqual(stats["added"], 1)
-        p = Product.objects.get(office_code="OF-PT2")
-        self.assertEqual(p.purchase_type, "online")
-
-    def test_unknown_value_falls_back_to_person(self):
-        ok, stats, errors = self._import(
-            self.NEW_HEADER,
-            ["W3", "REF-PT3", "WS-PT3", "OF-PT3", "", 900,
-             "موجود", "", "", "هرچی", ""])
-        self.assertTrue(ok, errors)
-        p = Product.objects.get(office_code="OF-PT3")
-        self.assertEqual(p.purchase_type, "person")
-
-    def test_old_file_update_leaves_existing_purchase_type(self):
-        # F2: updating an existing product from an old-format file (no
-        # «نوع خرید» column) must not reset its purchase type
-        make_product(office_code="OF-PT4", website_code="WS-PT4",
-                     purchase_type="online")
-        old_header = [h for h in self.NEW_HEADER if h != "نوع خرید"]
-        ok, stats, errors = self._import(
-            old_header,
-            ["W4", "REF-PT4", "ws-pt4", "of-pt4", "", 900,
-             "موجود", "", "", "edited"])
+            self.LEGACY_HEADER,
+            ["W2", "R2", "WS-GU", "OF-GU", "", 900,
+             "موجود", "", "", "آنلاین", "edited"])
         self.assertTrue(ok, errors)
         self.assertEqual(stats["updated"], 1)
-        # the file's codes are applied like any other field (lowercase here)
-        p = Product.objects.get(office_code="of-pt4")
-        self.assertEqual(p.purchase_type, "online")
+        p = Product.objects.get(office_code="OF-GU")
         self.assertEqual(p.notes, "edited")  # the update really happened
+        self.assertEqual(list(errors), [])
 
-    def test_new_file_update_applies_purchase_type(self):
-        # the column present means the value is authoritative on update
-        make_product(office_code="OF-PT5", website_code="WS-PT5")
-        ok, stats, errors = self._import(
-            self.NEW_HEADER,
-            ["W5", "REF-PT5", "WS-PT5", "OF-PT5", "", 900,
-             "موجود", "", "", "آنلاین", ""])
-        self.assertTrue(ok, errors)
-        self.assertEqual(stats["updated"], 1)
-        p = Product.objects.get(office_code="OF-PT5")
-        self.assertEqual(p.purchase_type, "online")
-
-    def test_export_includes_purchase_type(self):
-        make_product(office_code="OF-PEX", website_code="WS-PEX",
-                     purchase_type="online")
+    def test_export_has_no_purchase_type_column(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = f"{tmp}/products.csv"
             excel_io.export_products(path, "csv")
             with open(path, encoding="utf-8-sig") as fh:
                 text = fh.read()
-        self.assertIn("نوع خرید", text)
-        self.assertIn("آنلاین", text)
-        self.assertIn("OF-PEX", text)
+        self.assertNotIn("نوع خرید", text)
+        header = text.splitlines()[0]
+        self.assertNotIn("نوع", header.split(","))

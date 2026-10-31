@@ -28,12 +28,8 @@ _PRODUCT_NOCASE = {"office_code", "website_code", "name", "brand", "supplier"}
 _PRODUCT_WRITE_FIELDS = (
     "name", "reference", "office_code", "website_code", "brand",
     "purchase_price", "supplier", "purchase_date",
-    "purchase_type", "notes", "image",
+    "notes", "image",
 )
-
-
-# B4: نوع خرید — the model field existed but was never settable
-PURCHASE_TYPES = ("person", "online")
 
 
 def product_queryset(params) -> QuerySet:
@@ -103,11 +99,6 @@ def _product_values(payload):
     else:
         purchase_date = ""
 
-    # B4: نوع خرید — حضوری (پیش‌فرض) یا آنلاین
-    purchase_type = clean(payload.get("purchase_type")) or "person"
-    if purchase_type not in PURCHASE_TYPES:
-        raise ApiError(400, "نوع خرید معتبر نیست (حضوری یا آنلاین)")
-
     return {
         "name": name,
         "reference": clean(payload.get("reference")),
@@ -119,7 +110,6 @@ def _product_values(payload):
         "available": True,
         "supplier": clean(payload.get("supplier")),
         "purchase_date": purchase_date,
-        "purchase_type": purchase_type,
         "notes": clean(payload.get("notes")),
         "image": clean(payload.get("image")),
     }

@@ -208,7 +208,7 @@
     {% if recent_purchases %}
     <div class="table-wrap">
       <table class="data compact">
-        <thead><tr><th>ساعت</th><th>تاریخ خرید</th><th>نوع</th><th>قیمت خرید</th></tr></thead>
+        <thead><tr><th>ساعت</th><th>تاریخ خرید</th><th>قیمت خرید</th></tr></thead>
         <tbody>
           {% for p in recent_purchases %}
           <tr>
@@ -222,7 +222,6 @@
               </div>
             </td>
             <td class="muted">{{ p.purchase_date_fa or "—" }}</td>
-            <td>{{ '<span class="badge purple">آنلاین</span>' | safe if p.purchase_type == 'online' else '<span class="badge gray plain">حضوری</span>' | safe }}</td>
             <td class="num">{{ p.purchase_price_display if p.purchase_price else "—" }}</td>
           </tr>
           {% endfor %}

@@ -73,9 +73,11 @@ class ProductDictTests(TestCase):
                     "created_at", "updated_at", "notes", "image"):
             self.assertIn(key, d)
         # Spec-002: no product-level sale price or per-unit profit at all
+        # G1: no purchase-type labels either (all purchases are in-person)
         for gone in ("sale_price", "sale_price_display", "profit_per_unit",
                      "profit_per_unit_display", "total_sale_value",
-                     "total_sale_value_display"):
+                     "total_sale_value_display",
+                     "purchase_type", "purchase_type_fa"):
             self.assertNotIn(gone, d)
         self.assertEqual(d["available"], 1)
         self.assertIs(d["is_available"], True)

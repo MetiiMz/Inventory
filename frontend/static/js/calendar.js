@@ -157,7 +157,6 @@ function showEventDetail(kind, id) {
     add("برند", esc(d.brand));
     add("رفرنس", esc(d.reference));
     add("قیمت خرید", d.purchase_price_display ? d.purchase_price_display + " تومان" : "");
-    add("نوع خرید", d.purchase_type_fa);
     add("تأمین‌کننده", esc(d.supplier));
     add("وضعیت", d.is_available ? '<span class="badge green plain">موجود</span>' : '<span class="badge red plain">ناموجود</span>');
     add("یادداشت", esc(d.notes));

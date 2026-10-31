@@ -5,7 +5,7 @@
 ## Entity changes
 
 ### Product — sale price removed
-Fields (after): `name`, `reference`, `office_code`, `website_code`, `brand`, `purchase_price` (cost, FloatField), `available`, `supplier`, `purchase_date` (ISO string), `purchase_type`, `notes`, `image`, `created_at`, `updated_at`.
+Fields (after): `name`, `reference`, `office_code`, `website_code`, `brand`, `purchase_price` (cost, FloatField), `available`, `supplier`, `purchase_date` (ISO string), `notes`, `image`, `created_at`, `updated_at`.
 - **Removed**: `sale_price` (migration `0008_remove_product_sale_price`).
 - Validation: unchanged (cost price stays 0-tolerant as today).
 
