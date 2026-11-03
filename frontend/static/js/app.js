@@ -305,13 +305,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const boxClose = $(".img-lightbox-close");
   if (!box || !boxImg || !boxClose) return;
 
+  let previousActive = null;
+
   function openLightbox(src, alt) {
     if (!src) return;
+    previousActive = document.activeElement;
     boxImg.src = src;
     boxImg.alt = alt || "";
     box.classList.add("open");
     box.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
+    boxClose.focus();
   }
 
   function closeLightbox() {
@@ -319,17 +323,23 @@ document.addEventListener("DOMContentLoaded", () => {
     box.setAttribute("aria-hidden", "true");
     boxImg.src = "";
     document.body.style.overflow = "";
+    if (previousActive) {
+      previousActive.focus();
+      previousActive = null;
+    }
   }
 
   // کلیک روی هر تصویر → بزرگنمایی (همه تصاویر، همه صفحات)
   document.addEventListener("click", (e) => {
     const img = e.target.closest("img");
-    if (!img) return;
-    if (img.closest(".img-lightbox")) return;
-    const src = img.getAttribute("src") || img.currentSrc || "";
-    if (!src) return;
+    if (!img || img.closest(".img-lightbox")) return;
+    if (img.closest(".sidebar")) return;            // site logo: no zoom
+    const src = img.getAttribute("src") || "";
+    if (!src) return;                               // empty placeholders
+    e.preventDefault();
+    e.stopPropagation();
     openLightbox(src, img.getAttribute("alt") || "");
-  });
+  }, true);
 
   boxClose.addEventListener("click", (e) => { e.preventDefault(); closeLightbox(); });
   box.addEventListener("click", (e) => {

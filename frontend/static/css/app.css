@@ -1259,7 +1259,8 @@ tr.row-highlight {
 .jdp-foot button:hover { background: var(--accent-soft); }
 /* ------------------------------------------------ بزرگنمایی تصاویر (Lightbox) */
 /* هر تصویر در کل سایت با کلیک در لایتباکس بزرگنمایی می‌شود */
-img { cursor: zoom-in; }
+img[src]:not(.placeholder):not(.img-lightbox-img) { cursor: zoom-in; }
+.sidebar img { cursor: default; }
 
 .img-lightbox {
   position: fixed;
@@ -1321,6 +1322,7 @@ img { cursor: zoom-in; }
   white-space: nowrap;
   opacity: 0.9;
 }
+.img-lightbox-caption:empty { display: none; }
 @keyframes imgLightboxFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes imgLightboxZoom { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (max-width: 600px) {
