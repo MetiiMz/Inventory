@@ -2,7 +2,9 @@
 """تنظیمات، برندها و پشتیبان‌گیری — پورت database.py قدیمی روی Django."""
 import datetime
 import os
+import shutil
 import sqlite3
+import zipfile
 
 from django.conf import settings
 from django.core.management import call_command
@@ -68,7 +70,39 @@ def backup_db(filename=None):
         src.backup(dst)
     dst.close()
     src.close()
+    _write_images_zip(target)
     return target
+
+
+def _images_zip_path(db_path):
+    """backup_x.db -> backup_x.images.zip"""
+    return os.path.splitext(db_path)[0] + ".images.zip"
+
+
+def _write_images_zip(db_path):
+    """IMG_DIR -> ZIP_STORED zip next to ``db_path`` (flat names, no dirs).
+
+    Missing/empty IMG_DIR still yields an empty zip. Written to a temp name
+    in the same directory and renamed, so a half-written zip never remains.
+    """
+    zip_path = _images_zip_path(db_path)
+    directory = os.path.dirname(zip_path)
+    tmp = os.path.join(
+        directory, ".%s.%d.tmp" % (os.path.basename(zip_path), os.getpid()))
+    try:
+        with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_STORED) as zf:
+            if os.path.isdir(IMG_DIR):
+                for name in sorted(os.listdir(IMG_DIR)):
+                    p = os.path.join(IMG_DIR, name)
+                    if os.path.isfile(p):  # فقط فایل‌های عادی (نه پوشه)
+                        zf.write(p, arcname=name)
+        os.replace(tmp, zip_path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def list_backups():
@@ -119,16 +153,59 @@ def restore_db(filename):
         return False, ("بازگردانی انجام شد اما به‌روزرسانی ساختار پایگاه‌داده "
                        f"ناموفق بود؛ از نسخه‌ی پشتیبان خودکار «{pre_name}» "
                        "برای بازگشت به وضعیت قبل استفاده کنید")
+    # تصاویرِ بکاپ را به IMG_DIR بازگرداند (بکاپ‌های قدیمی که zip ندارند،
+    # دقیقاً مثل قبل بازگردانده می‌شوند)
+    zip_path = _images_zip_path(target)
+    if os.path.isfile(zip_path):
+        _extract_images_zip(zip_path)
     return True, ""
 
 
 def delete_backup(filename):
     safe = os.path.basename(filename or "")
     p = os.path.join(BACKUP_DIR, safe)
+    removed = False
     if os.path.isfile(p):
         os.remove(p)
+        removed = True
+    zip_path = _images_zip_path(p)
+    if os.path.isfile(zip_path):
+        os.remove(zip_path)
+        removed = True
+    if removed:
         return True, ""
     return False, "فایل یافت نشد"
+
+
+def _zip_name_is_safe(name):
+    """Only plain file names: no directories, no path escapes, no absolute paths."""
+    if not name or name in (".", ".."):
+        return False
+    if "/" in name or "\\" in name or ".." in name:
+        return False
+    return not os.path.isabs(name)
+
+
+def _extract_images_zip(zip_path):
+    """Extract the images zip into IMG_DIR.
+
+    Never delete or overwrite an existing file: a clashing name keeps the
+    existing file.
+    """
+    os.makedirs(IMG_DIR, exist_ok=True)
+    with zipfile.ZipFile(zip_path) as zf:
+        for member in zf.infolist():
+            name = member.filename
+            if member.is_dir() or not _zip_name_is_safe(name):
+                continue
+            dst = os.path.join(IMG_DIR, name)
+            if os.path.exists(dst):
+                continue  # فایل قبلی دست‌نخورده می‌ماند
+            try:
+                with zf.open(member) as src, open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+            except OSError:
+                continue
 
 
 # ---------------------------------------------------------------- clear database
