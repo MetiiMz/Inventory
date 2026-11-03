@@ -1257,3 +1257,77 @@ tr.row-highlight {
   font: inherit; font-size: 12px; cursor: pointer; padding: 3px 6px; border-radius: 8px;
 }
 .jdp-foot button:hover { background: var(--accent-soft); }
+/* ------------------------------------------------ بزرگنمایی تصاویر (Lightbox) */
+/* هر تصویر در کل سایت با کلیک در لایتباکس بزرگنمایی می‌شود */
+img { cursor: zoom-in; }
+
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 12, 14, 0.82);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+  box-sizing: border-box;
+  animation: imgLightboxFade 0.22s ease;
+}
+.img-lightbox.open { display: flex; }
+.img-lightbox[aria-hidden="true"] { display: none !important; }
+.img-lightbox img {
+  max-width: 92vw;
+  max-height: 82vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  animation: imgLightboxZoom 0.22s ease;
+  display: block;
+}
+.img-lightbox .img-lightbox-close {
+  position: fixed;
+  top: 18px;
+  inset-inline-end: 18px;
+  z-index: 10001;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+  padding: 0;
+}
+.img-lightbox .img-lightbox-close:hover { background: rgba(0, 0, 0, 0.85); }
+.img-lightbox-caption {
+  position: fixed;
+  bottom: 26px;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  z-index: 10001;
+  color: #ffffff;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  opacity: 0.9;
+}
+@keyframes imgLightboxFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes imgLightboxZoom { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (max-width: 600px) {
+  .img-lightbox { padding: 12px; }
+  .img-lightbox img { border-radius: var(--radius-sm); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .img-lightbox, .img-lightbox img { animation: none !important; }
+}
+

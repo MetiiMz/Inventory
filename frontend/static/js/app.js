@@ -214,7 +214,9 @@ function setupImageUpload(wrapEl) {
   }
 
   if (pickBtn) pickBtn.addEventListener("click", (e) => { e.preventDefault(); input.click(); });
-  preview.addEventListener("click", () => input.click());
+  preview.addEventListener("click", () => {
+    if (!currentPath) input.click(); // تصویر خالی: انتخاب فایل — تصویر بارگذاری‌شده توسط لایتباکس بزرگنمایی می‌شود
+  });
   input.addEventListener("change", () => {
     if (input.files[0]) uploadFile(input.files[0]);
     input.value = "";
@@ -294,5 +296,49 @@ function setDefaultJalaliDates() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
+
+/* ------------------------------------------------ بزرگنمایی تصویر (Lightbox) */
+/* هر تصویر در سایت با کلیک در مشاهده‌ی بزرگ باز می‌شود (بسته با دکمه، کلیک بیرون یا esc) */
+(function () {
+  const box = $(".img-lightbox");
+  const boxImg = $(".img-lightbox-img");
+  const boxClose = $(".img-lightbox-close");
+  if (!box || !boxImg || !boxClose) return;
+
+  function openLightbox(src, alt) {
+    if (!src) return;
+    boxImg.src = src;
+    boxImg.alt = alt || "";
+    box.classList.add("open");
+    box.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeLightbox() {
+    box.classList.remove("open");
+    box.setAttribute("aria-hidden", "true");
+    boxImg.src = "";
+    document.body.style.overflow = "";
+  }
+
+  // کلیک روی هر تصویر → بزرگنمایی (همه تصاویر، همه صفحات)
+  document.addEventListener("click", (e) => {
+    const img = e.target.closest("img");
+    if (!img) return;
+    if (img.closest(".img-lightbox")) return;
+    const src = img.getAttribute("src") || img.currentSrc || "";
+    if (!src) return;
+    openLightbox(src, img.getAttribute("alt") || "");
+  });
+
+  boxClose.addEventListener("click", (e) => { e.preventDefault(); closeLightbox(); });
+  box.addEventListener("click", (e) => {
+    if (e.target === box) closeLightbox();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && box.classList.contains("open")) closeLightbox();
+  });
+})();
+
   setDefaultJalaliDates();
 });
