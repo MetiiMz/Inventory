@@ -18,10 +18,33 @@ from inventory.utils import clean
 from .common import ApiError
 
 
-ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".svg"}
+ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 
 
-ICON_EXT = {".png", ".svg", ".ico", ".jpg", ".jpeg", ".webp"}
+ICON_EXT = {".png", ".ico", ".jpg", ".jpeg", ".webp"}
+
+
+def _signature_ok(ext, content):
+    """True only if ``content`` carries a real image signature for ``ext``."""
+    if not content:
+        return False
+    if ext == ".png":
+        return content.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext in (".jpg", ".jpeg"):
+        return content.startswith(b"\xff\xd8\xff")
+    if ext == ".gif":
+        return content.startswith(b"GIF87a") or content.startswith(b"GIF89a")
+    if ext == ".webp":
+        return (
+            len(content) >= 12
+            and content[:4] == b"RIFF"
+            and content[8:12] == b"WEBP"
+        )
+    if ext == ".avif":
+        return len(content) >= 12 and content[4:12] in (b"ftypavif", b"ftypavis")
+    if ext == ".ico":
+        return content.startswith(b"\x00\x00\x01\x00")
+    return False
 
 
 def _save_uploaded(kind, ext, content):
@@ -29,6 +52,8 @@ def _save_uploaded(kind, ext, content):
     allowed = ICON_EXT if kind == "icon" else ALLOWED_EXT
     if ext not in allowed:
         return None, "فرمت فایل پشتیبانی نمی‌شود"
+    if not _signature_ok(ext, content):
+        return None, "فایل انتخاب‌شده تصویر معتبر نیست"
     fname = ("icon_" if kind == "icon" else "img_") + \
         datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + \
         secrets.token_hex(4) + ext
