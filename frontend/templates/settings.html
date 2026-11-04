@@ -119,8 +119,9 @@
       شماره‌گذاری رکوردها هم از ۱ شروع می‌شود. تنظیمات فروشگاه، برندها و آیکون سایت پاک نمی‌شوند و تصاویر ثبت‌شده باقی می‌مانند.
     </p>
     <div class="clear-counts" id="clear-counts"></div>
-    <div class="row mt-14">
+    <div class="row mt-14" style="gap:8px">
       <button class="btn btn-danger" id="btn-clear-db" type="button">پاک‌سازی کامل پایگاه‌داده…</button>
+      <button class="btn btn-sm" id="btn-clean-images" type="button">پاک‌سازی تصاویر بلااستفاده</button>
     </div>
   </section>
 </div>
@@ -421,6 +422,21 @@ $("#btn-clear-db").addEventListener("click", async () => {
     loadClearInfo();
   } catch (err) {
     toast(err.message, "error");
+    btn.disabled = false;
+  }
+});
+
+$("#btn-clean-images").addEventListener("click", async () => {
+  if (!confirm("تصاویر بلااستفاده و قدیمی‌تر از یک ساعت را حذف می‌کند. ادامه می‌دهید؟")) return;
+  const btn = $("#btn-clean-images");
+  btn.disabled = true;
+  try {
+    const res = await api("/api/images/cleanup", { method: "POST", body: {} });
+    const removed = Number(res.removed || 0);
+    toast(`${faNum(removed)} تصویر حذف شد`);
+  } catch (err) {
+    toast(err.message, "error");
+  } finally {
     btn.disabled = false;
   }
 });

@@ -7,6 +7,7 @@ import os
 from django.conf import settings
 from django.http import FileResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from inventory.api import services
 
@@ -17,6 +18,16 @@ from .common import _ok, _fail, _guard
 def api_upload(request):
     """POST /api/upload — image upload (JSON base64 or multipart) → ``{path}``."""
     return _guard(lambda: _ok(path=services.save_upload(request)))
+
+
+@csrf_exempt
+@require_POST
+def api_images_cleanup(request):
+    """POST /api/images/cleanup — remove unreferenced old images → ``{removed}``."""
+    def run():
+        removed = services.cleanup_orphan_images()
+        return _ok(removed=removed)
+    return _guard(run)
 
 
 

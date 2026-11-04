@@ -35,6 +35,7 @@ urlpatterns = [
     path("api/brands", compat.api_brands),
     path("api/brands/delete", compat.api_brands_delete),
     path("api/upload", compat.api_upload),
+    path("api/images/cleanup", compat.api_images_cleanup),
     path("data/images/<path:fname>", compat.serve_image),
 
     # products

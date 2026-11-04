@@ -6,9 +6,13 @@ import datetime
 import json
 import os
 import secrets
+import stat
+import time
 
 from django.conf import settings
 
+from inventory.dbhelpers import IMG_DIR, get_setting
+from inventory.models import Product, Repair, Tracking
 from inventory.utils import clean
 
 from .common import ApiError
@@ -73,3 +77,56 @@ def save_upload(request) -> str:
     if err:
         raise ApiError(400, err)
     return fname
+
+
+def cleanup_orphan_images(min_age_seconds=3600):
+    """حذف تصاویر بلااستفاده و قدیمی‌تر از min_age_seconds از IMG_DIR.
+
+    فقط فایل‌های عادی (نه پوشه، نه نماد/ symlink) داخل IMG_DIR در نظر گرفته
+    می‌شوند و هرگز چیزی خارج از IMG_DIR لمس نمی‌شود. فایلی که توسط
+    Product.image / Repair.image / Tracking.image ارجاع داده شده است یا برابر
+    با تنظیمه‌ی site_icon است، حفظ می‌شود. فایلی جدیدتر از آستانه سِن (چون
+    شاید در حال پر کردن فرم باز باشد) حذف نمی‌شود.
+
+    Returns:
+        int: تعداد فایل‌های حذف‌شده.
+    """
+    referenced = set()
+    for model in (Product, Repair, Tracking):
+        referenced.update(
+            v
+            for v in model.objects.exclude(image="").values_list(
+                "image", flat=True
+            )
+            if v
+        )
+    site_icon = get_setting("site_icon", "")
+    if site_icon:
+        referenced.add(site_icon)
+
+    removed = 0
+    now = time.time()
+    try:
+        names = os.listdir(IMG_DIR)
+    except OSError:
+        return removed
+    for name in names:
+        path = os.path.join(IMG_DIR, name)
+        try:
+            st = os.lstat(path)
+        except OSError:
+            continue
+        # فقط فایل‌های عادی — نه پوشه و نه نماد (symlink هرگز دنبال نمی‌شود)
+        if not stat.S_ISREG(st.st_mode):
+            continue
+        if name in referenced:
+            continue
+        # اگر هنوز در حال پر کردن فرم است، لمس نمی‌شود
+        if now - st.st_mtime < min_age_seconds:
+            continue
+        try:
+            os.remove(path)
+            removed += 1
+        except OSError:
+            pass
+    return removed

@@ -33,7 +33,7 @@ from .reports import api_monthly_activity
 from .settings import (
     api_brands, api_brands_delete, api_settings, api_settings_site_icon,
 )
-from .uploads import api_upload, serve_image
+from .uploads import api_upload, api_images_cleanup, serve_image
 from .backups_export import (
     export_file, api_import_products, api_import_template, api_backups, api_backups_create,
     api_backups_upload, api_backups_download, api_backups_restore, api_backups_delete, api_database_info,
@@ -46,7 +46,7 @@ __all__ = [
     'api_payment_detail', 'api_payment_add', 'api_payment_settle_full', 'api_payments_bulk_delete', 'api_repairs', 'api_repair_detail',
     'api_repairs_bulk_delete', 'api_repair_status', 'api_tracking', 'api_tracking_detail', 'api_tracking_bulk_delete', 'api_calendar',
     'api_calendar_day', 'api_monthly_activity', 'api_brands', 'api_brands_delete', 'api_settings', 'api_settings_site_icon',
-    'api_upload', 'serve_image', 'export_file', 'api_import_products', 'api_import_template', 'api_backups',
+    'api_upload', 'api_images_cleanup', 'serve_image', 'export_file', 'api_import_products', 'api_import_template', 'api_backups',
     'api_backups_create', 'api_backups_upload', 'api_backups_download', 'api_backups_restore', 'api_backups_delete', 'api_database_info',
     'api_database_clear',
 ]
