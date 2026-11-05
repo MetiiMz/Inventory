@@ -2,6 +2,8 @@
 """Backup/export/import/database adapters: Excel in/out, db backups, database clear."""
 
 import os
+import io
+import zipfile
 
 from django.conf import settings
 from django.http import FileResponse
@@ -12,7 +14,7 @@ from inventory.api import services
 from inventory.api.services import ApiError
 from inventory.dbhelpers import (
     backup_db, clear_database, count_records, delete_backup, list_backups,
-    restore_db,
+    restore_db, _images_zip_path, _zip_name_is_safe,
 )
 
 from .common import _body, _ok, _fail, _guard, _attachment
@@ -76,14 +78,85 @@ def api_backups_create(request):
 
 
 
+def _validate_sqlite_db(path):
+    """True if ``path`` is a readable TikoTime sqlite database."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(path)
+        conn.execute("SELECT COUNT(*) FROM products")
+        conn.close()
+    except sqlite3.Error:
+        return False
+    return True
+
+
+def _write_images_zip(db_path, images):
+    """Write ``images`` (list of ``(name, bytes)``) to the sidecar zip next to ``db_path``."""
+    zip_path = _images_zip_path(db_path)
+    directory = os.path.dirname(zip_path)
+    tmp = os.path.join(
+        directory, ".%s.%d.tmp" % (os.path.basename(zip_path), os.getpid()))
+    try:
+        with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_STORED) as zf:
+            for name, data in images:
+                zf.writestr(name, data)
+        os.replace(tmp, zip_path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _upload_zip(f, fname):
+    """Handle a ``.zip`` upload: extract ``<stem>.db`` and the image files."""
+    stem = os.path.splitext(fname)[0]
+    db_name = stem + ".db"
+    db_content = None
+    images = []
+    try:
+        with zipfile.ZipFile(f) as zf:
+            for member in zf.infolist():
+                name = member.filename
+                if member.is_dir():
+                    continue
+                if not _zip_name_is_safe(name):
+                    return _fail("نام فایل در بکاپ نامعتبر است")
+                if name == db_name:
+                    db_content = zf.read(member)
+                elif name.endswith(".db"):
+                    return _fail("بکاپ حاوی چندین فایل پایگاه‌داده است")
+                else:
+                    images.append((name, zf.read(member)))
+    except zipfile.BadZipFile:
+        return _fail("فایل انتخاب‌شده یک فایل ZIP معتبر نیست")
+    if db_content is None:
+        return _fail("بکاپ حاوی فایل پایگاه‌داده (.db) نیست")
+    os.makedirs(str(settings.BACKUP_DIR), exist_ok=True)
+    target = os.path.join(str(settings.BACKUP_DIR), db_name)
+    with open(target, "wb") as out:
+        out.write(db_content)
+    _write_images_zip(target, images)
+    if not _validate_sqlite_db(target):
+        os.remove(target)
+        images_zip = _images_zip_path(target)
+        if os.path.isfile(images_zip):
+            os.remove(images_zip)
+        return _fail("فایل انتخاب‌شده یک نسخه‌ی پشتیبان معتبر TikoTime نیست")
+    return _ok(name=db_name)
+
+
 @csrf_exempt
 @require_POST
 def api_backups_upload(request):
-    """POST /api/backups/upload — upload a ``.db`` backup file."""
+    """POST /api/backups/upload — upload a ``.db`` or ``.zip`` backup file."""
     f = request.FILES.get("file")
     if not f or not f.name:
         return _fail("فایلی انتخاب نشده است")
     fname = os.path.basename(f.name)
+    if fname.endswith(".zip"):
+        return _upload_zip(f, fname)
     if not fname.endswith(".db"):
         fname += ".db"
     os.makedirs(str(settings.BACKUP_DIR), exist_ok=True)
@@ -91,16 +164,28 @@ def api_backups_upload(request):
     with open(target, "wb") as out:
         for chunk in f.chunks():
             out.write(chunk)
-    import sqlite3
-    try:
-        conn = sqlite3.connect(target)
-        conn.execute("SELECT COUNT(*) FROM products")
-        conn.close()
-    except sqlite3.Error:
+    if not _validate_sqlite_db(target):
         os.remove(target)
         return _fail("فایل انتخاب‌شده یک نسخه‌ی پشتیبان معتبر TikoTime نیست")
     return _ok(name=fname)
 
+
+def _backup_bundle_response(db_path, images_zip, safe):
+    """Bundle ``<stem>.db`` + its images into a single in-memory ``<stem>.zip``."""
+    stem = os.path.splitext(os.path.basename(db_path))[0]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.write(db_path, arcname=f"{stem}.db")
+        with zipfile.ZipFile(images_zip) as izf:
+            for member in izf.infolist():
+                name = member.filename
+                if member.is_dir() or not _zip_name_is_safe(name):
+                    continue
+                zf.writestr(f"images/{name}", izf.read(name))
+    buf.seek(0)
+    resp = FileResponse(buf, content_type="application/zip")
+    resp["Content-Disposition"] = f'attachment; filename="{stem}.zip"'
+    return resp
 
 
 @require_GET
@@ -110,6 +195,9 @@ def api_backups_download(request, fname):
     path = os.path.join(str(settings.BACKUP_DIR), safe)
     if not os.path.isfile(path):
         return _fail("یافت نشد", 404)
+    images_zip = _images_zip_path(path)
+    if os.path.isfile(images_zip):
+        return _backup_bundle_response(path, images_zip, safe)
     resp = FileResponse(open(path, "rb"), content_type="application/octet-stream")
     resp["Content-Disposition"] = f'attachment; filename="{safe}"'
     return resp
