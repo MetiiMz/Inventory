@@ -2,7 +2,8 @@
 """Brands and store settings: brand CRUD, site settings, site icon."""
 
 from inventory.dbhelpers import (
-    add_brand, delete_brand, get_setting, set_setting,
+    add_brand, add_supplier, delete_brand, delete_supplier, get_setting,
+    set_setting,
 )
 from inventory.utils import clean
 
@@ -25,6 +26,24 @@ def brands_add(payload):
 def brands_delete(payload):
     """Delete a brand by name."""
     delete_brand((payload or {}).get("name"))
+
+
+def suppliers_list():
+    """All supplier names, alphabetically."""
+    from inventory.dbhelpers import get_suppliers
+    return get_suppliers()
+
+
+def suppliers_add(payload):
+    """Add a supplier; raises with the legacy message on duplicates."""
+    good, err = add_supplier((payload or {}).get("name"))
+    if not good:
+        raise ApiError(400, err)
+
+
+def suppliers_delete(payload):
+    """Delete a supplier by name."""
+    delete_supplier((payload or {}).get("name"))
 
 
 def site_settings() -> dict:

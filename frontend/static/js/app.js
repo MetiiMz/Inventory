@@ -262,6 +262,20 @@ async function fillBrandDatalist(selectEl) {
   } catch { /* بی‌خیال */ }
 }
 
+/* ------------------------------------------------ انتخاب تأمین‌کنندگان (datalist) */
+
+async function fillSupplierDatalist(selectEl) {
+  try {
+    const data = await api("/api/suppliers");
+    selectEl.innerHTML = "";
+    data.suppliers.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      selectEl.appendChild(opt);
+    });
+  } catch { /* بی‌خیال */ }
+}
+
 /* ------------------------------------------------ تاریخ پیش‌فرض فرم‌ها */
 
 /* ------------------------------------------------ ورودی‌های مبلغ با جداکننده‌ی هزارگان

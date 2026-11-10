@@ -242,6 +242,46 @@ class CompatMiscContractTests(TestCase):
                              content_type="application/json")
         self.assertTrue(r.json()["ok"])
 
+    def test_suppliers_get_and_post(self):
+        r = self.client.post("/api/suppliers", {"name": "توراندوت"},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 200, r.content)
+        r = self.client.get("/api/suppliers")
+        self.assertEqual(r.json()["suppliers"], ["توراندوت"])
+        r = self.client.post("/api/suppliers/delete", {"name": "توراندوت"},
+                             content_type="application/json")
+        self.assertTrue(r.json()["ok"])
+
+    def test_suppliers_duplicate_and_empty(self):
+        self.client.post("/api/suppliers", {"name": "توراندوت"},
+                         content_type="application/json")
+        r = self.client.post("/api/suppliers", {"name": "توراندوت"},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(r.json()["ok"])
+        self.assertIn("قبلاً", r.json()["error"])
+        r = self.client.post("/api/suppliers", {"name": "   "},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("خالی", r.json()["error"])
+
+    def test_suppliers_wrong_method_lists_like_brands(self):
+        """Non-POST on /api/suppliers falls back to the list, like /api/brands."""
+        self.client.post("/api/suppliers", {"name": "توراندوت"},
+                         content_type="application/json")
+        r = self.client.put("/api/suppliers", content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["suppliers"], ["توراندوت"])
+
+    def test_suppliers_cross_origin_post_is_403(self):
+        r = self.client.post("/api/suppliers", {"name": "توراندوت"},
+                             content_type="application/json",
+                             HTTP_ORIGIN="http://evil.example")
+        self.assertEqual(r.status_code, 403)
+        body = r.json()
+        self.assertFalse(body["ok"])
+        self.assertTrue(body["error"])
+
     def test_settings_get_and_post(self):
         r = self.client.post("/api/settings", {"store_name": "تیک"},
                              content_type="application/json")

@@ -7,10 +7,12 @@ attributes directly instead of ``override_settings`` — and they point
 them at a temp *file* DB, since the Django test database is in-memory
 and invisible to the raw sqlite3 connections those helpers use.
 """
+import importlib
 import os
 import tempfile
 from unittest import mock
 
+from django.apps import apps
 from django.test import TestCase
 
 from inventory import dbhelpers, reports
@@ -47,6 +49,50 @@ class BrandTests(TestCase):
         self.assertEqual(dbhelpers.get_brands(), ["امگا", "رولکس"])  # sorted by value
         self.assertTrue(dbhelpers.delete_brand("رولکس"))
         self.assertEqual(dbhelpers.get_brands(), ["امگا"])
+
+
+class SupplierTests(TestCase):
+    """Suppliers live in the Setting table under 'supplier:' keys."""
+
+    def test_add_list_delete(self):
+        good, err = dbhelpers.add_supplier("توراندوت")
+        self.assertTrue(good, err)
+        good, err = dbhelpers.add_supplier("توراندوت")
+        self.assertFalse(good)
+        self.assertIn("قبلاً", err)
+        good, err = dbhelpers.add_supplier("   ")
+        self.assertFalse(good)
+        self.assertIn("خالی", err)
+        too_long = "x" * 201
+        good, err = dbhelpers.add_supplier(too_long)
+        self.assertFalse(good)
+        self.assertIn("بلند", err)
+        dbhelpers.add_supplier("پرتو")
+        self.assertEqual(dbhelpers.get_suppliers(), ["توراندوت", "پرتو"])  # sorted by value
+        self.assertTrue(dbhelpers.delete_supplier("توراندوت"))
+        self.assertEqual(dbhelpers.get_suppliers(), ["پرتو"])
+
+
+class SupplierMigrationTests(TestCase):
+    """0010_seed_suppliers — pre-fill from products already in use."""
+
+    def test_seed_suppliers_from_existing_products_idempotent(self):
+        make_product(supplier="توراندوت", office_code="OF-M1", website_code="WS-M1")
+        make_product(supplier="توراندوت", office_code="OF-M2", website_code="WS-M2")  # duplicate
+        make_product(supplier="پرتو", office_code="OF-M3", website_code="WS-M3")
+        make_product(supplier="", office_code="OF-M4", website_code="WS-M4")  # ignored
+        make_product(supplier="  ", office_code="OF-M5", website_code="WS-M5")  # ignored
+
+        migration = importlib.import_module("inventory.migrations.0010_seed_suppliers")
+        migration.seed_suppliers(apps, None)
+        migration.seed_suppliers(apps, None)  # idempotent: running twice is safe
+
+        names = list(
+            Setting.objects.filter(key__startswith="supplier:")
+            .order_by("value")
+            .values_list("value", flat=True)
+        )
+        self.assertEqual(names, ["توراندوت", "پرتو"])
 
 
 class BackupTests(TestCase):

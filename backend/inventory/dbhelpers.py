@@ -52,6 +52,32 @@ def delete_brand(name):
     return True, ""
 
 
+# ---------------------------------------------------------------- suppliers
+def get_suppliers():
+    return list(
+        Setting.objects.filter(key__startswith="supplier:")
+        .order_by("value")
+        .values_list("value", flat=True)
+    )
+
+
+def add_supplier(name):
+    name = (name or "").strip()
+    if not name:
+        return False, "نام تأمین‌کننده خالی است"
+    if len(name) > 200:
+        return False, "نام تأمین‌کننده خیلی بلند است"
+    if Setting.objects.filter(key="supplier:" + name).exists():
+        return False, "این تأمین‌کننده قبلاً ثبت شده است"
+    Setting.objects.create(key="supplier:" + name, value=name)
+    return True, ""
+
+
+def delete_supplier(name):
+    Setting.objects.filter(key="supplier:" + name).delete()
+    return True, ""
+
+
 # ---------------------------------------------------------------- backups
 def _stamp():
     return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

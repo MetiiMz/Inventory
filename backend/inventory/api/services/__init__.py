@@ -44,8 +44,9 @@ from .tracking import (
     bulk_delete_tracking,
 )
 from .settings import (
-    brands_list, brands_add, brands_delete, site_settings, save_settings,
-    set_site_icon,
+    brands_list, brands_add, brands_delete,
+    suppliers_list, suppliers_add, suppliers_delete,
+    site_settings, save_settings, set_site_icon,
 )
 from .uploads import _save_uploaded, save_upload, cleanup_orphan_images
 from .calendar import _repair_cell, calendar_month, calendar_day
@@ -61,7 +62,8 @@ __all__ = [
     'payment_queryset', 'create_payment', 'update_payment', 'delete_payment', 'add_payment', 'settle_payment_full',
     'bulk_delete_payments', 'repair_queryset', '_repair_values', 'create_repair', 'update_repair', 'delete_repair',
     'bulk_delete_repairs', 'set_repair_status', 'tracking_queryset', '_tracking_values', 'create_tracking', 'update_tracking',
-    'delete_tracking', 'bulk_delete_tracking', 'brands_list', 'brands_add', 'brands_delete', 'site_settings',
+    'delete_tracking', 'bulk_delete_tracking', 'brands_list', 'brands_add', 'brands_delete',
+    'suppliers_list', 'suppliers_add', 'suppliers_delete', 'site_settings',
     'save_settings', 'set_site_icon', '_save_uploaded', 'save_upload', 'cleanup_orphan_images', '_repair_cell', 'calendar_month',
     'calendar_day', 'monthly_activity', '_export_funcs', 'export_data_file', 'import_products_file', 'import_template_file',
 ]

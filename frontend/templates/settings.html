@@ -69,6 +69,19 @@
       <div id="brands-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       <p class="li-sub mt-14">برندها در فرم افزودن ساعت به‌عنوان پیشنهاد نمایش داده می‌شوند.</p>
     </section>
+
+    <section class="glass card">
+      <div class="card-title">
+        <h3>تأمین‌کننده‌ها</h3>
+        <span class="badge blue plain" id="suppliers-count"></span>
+      </div>
+      <div class="row mb-14">
+        <input class="input grow" id="new-supplier" placeholder="نام تأمین‌کننده جدید…">
+        <button class="btn btn-primary" id="btn-add-supplier" type="button">افزودن</button>
+      </div>
+      <div id="suppliers-list" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <p class="li-sub mt-14">تأمین‌کنندگان در فرم افزودن ساعت به‌عنوان پیشنهاد نمایش داده می‌شوند.</p>
+    </section>
   </div>
 </div>
 
@@ -282,6 +295,51 @@ $("#brands-list").addEventListener("click", async (e) => {
   }
 });
 
+/* ------------------------------------------------ تأمین‌کنندگان */
+
+async function loadSuppliers() {
+  try {
+    const data = await api("/api/suppliers");
+    $("#suppliers-count").textContent = faNum(data.suppliers.length) + " تأمین‌کننده";
+    const box = $("#suppliers-list");
+    box.innerHTML = data.suppliers.map((s) => `
+      <span class="chip" style="cursor:default">
+        ${esc(s)}
+        <button type="button" class="supplier-del" data-name="${esc(s)}" title="حذف تأمین‌کننده" style="border:0;background:transparent;color:var(--red);cursor:pointer;font-family:inherit;font-weight:800;padding:0 2px">×</button>
+      </span>`).join("");
+  } catch { /* بی‌اهمیت */ }
+}
+
+$("#btn-add-supplier").addEventListener("click", async () => {
+  const inp = $("#new-supplier");
+  const name = inp.value.trim();
+  if (!name) { toast("نام تأمین‌کننده را بنویسید", "error"); return; }
+  try {
+    await api("/api/suppliers", { method: "POST", body: { name } });
+    toast("تأمین‌کننده افزوده شد");
+    inp.value = "";
+    loadSuppliers();
+  } catch (err) {
+    toast(err.message, "error");
+  }
+});
+
+$("#new-supplier").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("#btn-add-supplier").click(); }
+});
+
+$("#suppliers-list").addEventListener("click", async (e) => {
+  const del = e.target.closest(".supplier-del");
+  if (!del) return;
+  try {
+    await api("/api/suppliers/delete", { method: "POST", body: { name: del.dataset.name } });
+    toast("تأمین‌کننده حذف شد");
+    loadSuppliers();
+  } catch (err) {
+    toast(err.message, "error");
+  }
+});
+
 /* ------------------------------------------------ پشتیبان */
 
 async function loadBackups() {
@@ -444,6 +502,7 @@ $("#btn-clean-images").addEventListener("click", async () => {
 document.addEventListener("DOMContentLoaded", () => {
   loadSettings();
   loadBrands();
+  loadSuppliers();
   loadBackups();
   loadClearInfo();
 });

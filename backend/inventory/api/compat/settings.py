@@ -27,6 +27,21 @@ def api_brands_delete(request):
 
 
 @csrf_exempt
+def api_suppliers(request):
+    """GET lists suppliers; POST adds one (``{name}``) — legacy contract."""
+    if request.method == "POST":
+        return _guard(lambda: (services.suppliers_add(_body(request)), _ok())[1])
+    return _guard(lambda: _ok(suppliers=services.suppliers_list()))
+
+
+@csrf_exempt
+@require_POST
+def api_suppliers_delete(request):
+    """POST /api/suppliers/delete — remove a supplier."""
+    return _guard(lambda: (services.suppliers_delete(_body(request)), _ok())[1])
+
+
+@csrf_exempt
 def api_settings(request):
     """GET reads store settings; POST persists the whitelisted keys."""
     if request.method == "POST":

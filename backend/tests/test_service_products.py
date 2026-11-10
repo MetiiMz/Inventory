@@ -163,6 +163,16 @@ class ProductWriteTests(TestCase):
         self.assertEqual(err.status_code, 400)
         self.assertIsInstance(err.message, str)
 
+    def test_supplier_free_text_not_restricted_to_managed_list(self):
+        """K1: the supplier list only drives the UI choice; any text is saved."""
+        p, err = call(services.create_product, product_payload(supplier="سایر"))
+        self.assertIsNone(err)
+        self.assertEqual(Product.objects.get(id=p.id).supplier, "سایر")
+        p2, err = call(services.update_product, Product.objects.first(),
+                       product_payload(supplier="هرچه تایپ شود"), partial=True)
+        self.assertIsNone(err)
+        self.assertEqual(Product.objects.get(id=p2.id).supplier, "هرچه تایپ شود")
+
 
 class ProductPurchaseTypeRemovedTests(TestCase):
     """G1: «نوع خرید» (purchase_type) is no longer part of the product

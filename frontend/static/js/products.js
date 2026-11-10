@@ -214,6 +214,7 @@ function openProductModal(p = null) {
   form.reset();
   $("#product-modal-title").textContent = p ? "ویرایش ساعت" : "افزودن ساعت";
   fillBrandDatalist($("#brands-dl"));
+  fillSupplierDatalist($("#suppliers-dl"));
 
   const wrap = $("#modal-product .img-upload");
   wrap.dataset.ready = "";
