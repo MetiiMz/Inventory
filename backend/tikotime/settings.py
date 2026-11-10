@@ -93,6 +93,10 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 32 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Suite-wide safety net: redirect image/backup dirs to temp locations for the
+# entire test run so no test can wipe real db/images or db/backups.
+TEST_RUNNER = "tikotime.test_runner.SafeMediaTestRunner"
+
 for _d in (DATA_DIR, IMG_DIR, BACKUP_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 

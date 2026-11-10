@@ -99,11 +99,16 @@ class BackupTests(TestCase):
     """backup/restore/delete helpers run against a temp dir + temp file DB."""
 
     def test_backup_list_restore_delete(self):
-        with tempfile.TemporaryDirectory() as backup_dir:
+        with tempfile.TemporaryDirectory() as tmp:
+            backup_dir = os.path.join(tmp, "backups")
+            img_dir = os.path.join(tmp, "images")
+            os.makedirs(backup_dir, exist_ok=True)
+            os.makedirs(img_dir, exist_ok=True)
             with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as db_file:
                 db_path = db_file.name
             with mock.patch.object(dbhelpers, "BACKUP_DIR", backup_dir), \
-                 mock.patch.object(dbhelpers, "DB_PATH", db_path):
+                 mock.patch.object(dbhelpers, "DB_PATH", db_path), \
+                 mock.patch.object(dbhelpers, "IMG_DIR", img_dir):
                 target = dbhelpers.backup_db()
                 self.assertTrue(os.path.isfile(target))
                 names = dbhelpers.list_backups()
@@ -164,9 +169,12 @@ class ClearDatabaseTests(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = f"{tmp}/clear_test.db"
             self._make_raw_db(db_path)
+            img_dir = f"{tmp}/images"
+            os.makedirs(img_dir, exist_ok=True)
             with tempfile.TemporaryDirectory() as bdir, \
                  mock.patch.object(dbhelpers, "BACKUP_DIR", bdir), \
-                 mock.patch.object(dbhelpers, "DB_PATH", db_path):
+                 mock.patch.object(dbhelpers, "DB_PATH", db_path), \
+                 mock.patch.object(dbhelpers, "IMG_DIR", img_dir):
                 self.assertEqual(dbhelpers.count_records()["products"], 1)
                 counts = dbhelpers.clear_database()
             self.assertEqual(counts["products"], 1)

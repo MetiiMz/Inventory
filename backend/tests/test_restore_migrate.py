@@ -67,8 +67,10 @@ class OldSchemaRestoreTests(TransactionTestCase):
         # the ORM connection and dbhelpers must both talk to the live file
         cls._original_name = connections["default"].settings_dict["NAME"]
         _set_conn_name(connections["default"], cls.live_path)
+        os.makedirs(os.path.join(cls.tmp.name, "images"), exist_ok=True)
         for attr, value in (("DB_PATH", cls.live_path),
-                            ("BACKUP_DIR", cls.tmp.name)):
+                            ("BACKUP_DIR", cls.tmp.name),
+                            ("IMG_DIR", os.path.join(cls.tmp.name, "images"))):
             patcher = mock.patch.object(dbhelpers, attr, value)
             patcher.start()
             cls.addClassCleanup(patcher.stop)
