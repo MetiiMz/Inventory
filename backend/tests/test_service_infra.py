@@ -123,7 +123,7 @@ class PaymentWriteTests(TestCase):
         sale = Sale.objects.create(
             product=product, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            paid_cash=500, payment_type="deposit",
+            paid_amount=500, payment_type="deposit",
             is_settled=False)
         pay = make_payment(sale=sale, product=product, total_amount=1500,
                            paid_amount=500)
@@ -132,7 +132,7 @@ class PaymentWriteTests(TestCase):
         sale.refresh_from_db()
         self.assertEqual(pay.paid_amount, 1500)
         self.assertTrue(sale.is_settled)
-        self.assertEqual(sale.paid_cash, 1500)
+        self.assertEqual(sale.paid_amount, 1500)
 
         _, err = call(services.settle_payment_full, pay)
         self.assertIn("قبلاً", err.message)
@@ -153,25 +153,23 @@ class PaymentSaleLinkSyncTests(TestCase):
         product = make_product()
         self.sale = services.create_sale(sale_payload(
             product.id, payment_type="deposit", sale_price="1500000",
-            paid_cash="500000"))
+            deposit_amount="500000"))
         self.pay = Payment.objects.get(sale=self.sale)
 
     def test_add_instalment_routes_into_method_bucket(self):
-        self.pay = services.add_payment(self.pay, {"amount": "400000",
-                                                   "method": "pos"})
+        # method key is accepted but ignored — no payment method is stored
+        self.pay = services.add_payment(self.pay, {"amount": "400000"})
         self.sale.refresh_from_db()
         self.pay.refresh_from_db()
         self.assertEqual(self.pay.paid_amount, 900000)
-        self.assertEqual(self.sale.paid_cash, 500000)
-        self.assertEqual(self.sale.paid_pos, 400000)
-        self.assertEqual(self.sale.paid_card2card, 0)
+        self.assertEqual(self.sale.paid_amount, 900000)
         self.assertFalse(self.sale.is_settled)
 
     def test_add_instalment_defaults_to_cash_and_settles(self):
         services.add_payment(self.pay, {"amount": "1000000"})
         self.sale.refresh_from_db()
         self.pay.refresh_from_db()
-        self.assertEqual(self.sale.paid_cash, 1500000)
+        self.assertEqual(self.sale.paid_amount, 1500000)
         self.assertTrue(self.sale.is_settled)
         self.assertEqual(self.sale.settled_at, today_iso())
         self.assertEqual(self.pay.settled_at, today_iso())
@@ -184,28 +182,23 @@ class PaymentSaleLinkSyncTests(TestCase):
         self.assertEqual(self.pay.paid_amount, 500000)
 
     def test_add_instalments_full_pays_settles_both(self):
-        services.add_payment(self.pay, {"amount": "600000", "method": "pos"})
-        services.add_payment(self.pay, {"amount": "400000",
-                                        "method": "card2card"})
+        # method keys are accepted but ignored — no payment method is stored
+        services.add_payment(self.pay, {"amount": "600000"})
+        services.add_payment(self.pay, {"amount": "400000"})
         self.sale.refresh_from_db()
         self.pay.refresh_from_db()
-        self.assertEqual((self.sale.paid_cash, self.sale.paid_pos,
-                          self.sale.paid_card2card),
-                         (500000.0, 600000.0, 400000.0))
+        self.assertEqual(self.sale.paid_amount, 1500000)
         self.assertTrue(self.sale.is_settled)
         self.assertEqual(self.pay.settled_at, today_iso())
-        # A2 invariant still holds
-        self.assertEqual(self.sale.paid_cash + self.sale.paid_pos
-                         + self.sale.paid_card2card, self.pay.paid_amount)
         self.assertEqual(self.pay.total_amount, self.sale.sale_price)
 
     def test_settle_full_routes_remainder_into_given_method(self):
-        services.settle_payment_full(self.pay, {"method": "card2card"})
+        # method key is accepted but ignored — no payment method is stored
+        services.settle_payment_full(self.pay, {})
         self.sale.refresh_from_db()
         self.pay.refresh_from_db()
         self.assertEqual(self.pay.paid_amount, 1500000)
-        self.assertEqual(self.sale.paid_cash, 500000)
-        self.assertEqual(self.sale.paid_card2card, 1000000)
+        self.assertEqual(self.sale.paid_amount, 1500000)
         self.assertTrue(self.sale.is_settled)
         self.assertEqual(self.sale.settled_at, today_iso())
 

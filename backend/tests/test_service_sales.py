@@ -25,11 +25,11 @@ class SaleQuerysetTests(TestCase):
         self.cash = Sale.objects.create(
             product=self.p1, sale_price=100, purchase_price=50, profit=50,
             sale_date="2026-09-01", customer="Ali", customer_phone="09120000001",
-            paid_cash=100, payment_type="cash", is_settled=True)
+            paid_amount=100, payment_type="cash", is_settled=True)
         self.deposit = Sale.objects.create(
             product=self.p2, sale_price=200, purchase_price=50, profit=150,
             sale_date="2026-09-02", customer="Mary", customer_phone="09120000002",
-            paid_cash=50, payment_type="deposit",
+            paid_amount=50, payment_type="deposit",
             is_settled=False)
 
     def test_deposit_sales_are_always_listed(self):
@@ -46,13 +46,16 @@ class SaleQuerysetTests(TestCase):
         ids = list(services.sale_queryset({"sale_type": "online"})
                    .values_list("id", flat=True))
         self.assertEqual(ids, [])
+        # legacy pay_method values (pos / card2card) are ignored: no filter
         ids = list(services.sale_queryset({"pay_method": "pos"})
                    .values_list("id", flat=True))
-        self.assertEqual(ids, [])
+        self.assertEqual(sorted(ids), sorted([self.cash.id, self.deposit.id]))
         ids = list(services.sale_queryset({"pay_method": "cash"})
                    .values_list("id", flat=True))
-        # both fixtures paid in cash (deposit receipt paid_cash counts too)
-        self.assertIn(self.cash.id, ids)
+        self.assertEqual(ids, [self.cash.id])
+        ids = list(services.sale_queryset({"pay_method": "deposit"})
+                   .values_list("id", flat=True))
+        self.assertEqual(ids, [self.deposit.id])
 
     def test_date_range(self):
         ids = list(services.sale_queryset(
@@ -79,21 +82,21 @@ class SaleCreateTests(TestCase):
     def test_cash_sale_without_breakdown_defaults_to_cash(self):
         p = make_product()
         sale, _ = call(services.create_sale, sale_payload(p.id))
-        self.assertEqual(sale.paid_cash, 1_500_000)
-        self.assertEqual(sale.paid_pos, 0)
+        self.assertEqual(sale.paid_amount, 1_500_000)
 
     def test_cash_sale_with_breakdown(self):
+        # legacy buckets are validated but never stored — paid_amount = price
         p = make_product()
         sale, err = call(services.create_sale, sale_payload(
             p.id, paid_cash="400000", paid_pos="600000", paid_card2card="500000"))
         self.assertIsNone(err)
-        self.assertEqual((sale.paid_cash, sale.paid_pos, sale.paid_card2card),
-                         (400000.0, 600000.0, 500000.0))
+        self.assertTrue(sale.is_settled)
+        self.assertEqual(sale.paid_amount, 1500000)
 
     def test_deposit_creates_receipt_and_keeps_unsettled(self):
         p = make_product()
         sale, err = call(services.create_sale, sale_payload(
-            p.id, payment_type="deposit", paid_cash="500000"))
+            p.id, payment_type="deposit", deposit_amount="500000"))
         self.assertIsNone(err)
         self.assertFalse(sale.is_settled)
         receipt = Payment.objects.get(sale=sale)
@@ -126,13 +129,13 @@ class SaleCreateTests(TestCase):
             (sale_payload(p.id, customer_phone="123"), "شماره تماس"),
             (sale_payload(p.id, sale_price=""), "قیمت فروش را وارد کنید"),
             (sale_payload(p.id, sale_price="0"), "قیمت فروش را وارد کنید"),
-            (sale_payload(p.id, paid_cash="99999999"), "قیمت فروش"),
+            (sale_payload(p.id, deposit_amount="99999999"), "قیمت فروش"),
             (sale_payload(99999), "محصول یافت نشد"),
             (sale_payload(None), "محصول انتخاب نشده است"),
             (sale_payload(p.id, sale_date="31/31/9999"), "تاریخ فروش"),
-            (sale_payload(p.id, payment_type="deposit", paid_cash="0"),
+            (sale_payload(p.id, payment_type="deposit", deposit_amount="0"),
              "بیعانه"),
-            (sale_payload(p.id, paid_cash="500"), "برای فروش نقدی"),
+            (sale_payload(p.id, deposit_amount="500"), "برای فروش نقدی"),
         ]
         for payload, fragment in cases:
             _, err = call(services.create_sale, payload)
@@ -167,7 +170,7 @@ class SaleUpdateDeleteTests(TestCase):
         self.sale = services.create_sale(sale_payload(self.p.id))
         services.create_sale(sale_payload(
             make_product(office_code="OF-D", website_code="WS-D").id,
-            payment_type="deposit", paid_cash="500000"))
+            payment_type="deposit", deposit_amount="500000"))
 
     def test_update_prices_and_fields(self):
         services.update_sale(self.sale, {
@@ -182,7 +185,7 @@ class SaleUpdateDeleteTests(TestCase):
 
     def test_update_overpayment_rejected_against_new_price(self):
         _, err = call(services.update_sale, self.sale,
-                      {"sale_price": "1000000", "paid_cash": "2000000"})
+                      {"sale_price": "1000000", "deposit_amount": "2000000"})
         self.assertEqual(err.status_code, 400)
         self.assertIn("قیمت فروش", err.message)
         self.sale.refresh_from_db()
@@ -244,7 +247,7 @@ class SaleDepositReceiptSyncTests(TestCase):
     """A2: editing a deposit sale keeps its receipt and settlement in sync.
 
     Invariant — for every deposit sale:
-    ``paid_cash+paid_pos+paid_card2card == receipt.paid_amount`` and
+    ``sale.paid_amount == receipt.paid_amount`` and
     ``receipt.total_amount == sale.sale_price``.
     """
 
@@ -252,20 +255,20 @@ class SaleDepositReceiptSyncTests(TestCase):
         self.p = make_product()
         self.deposit = services.create_sale(sale_payload(
             self.p.id, payment_type="deposit", sale_price="1500000",
-            paid_cash="500000"))
+            deposit_amount="500000"))
         self.receipt = Payment.objects.get(sale=self.deposit)
 
     def assert_invariant(self, sale):
         sale.refresh_from_db()
         receipt = Payment.objects.get(sale=sale)
-        paid_total = sale.paid_cash + sale.paid_pos + sale.paid_card2card
-        self.assertEqual(paid_total, receipt.paid_amount)
+        # the single stored paid_amount mirrors the receipt
+        self.assertEqual(sale.paid_amount, receipt.paid_amount)
         self.assertEqual(receipt.total_amount, sale.sale_price)
 
     def test_edit_price_buyer_and_paid_amounts_sync_receipt(self):
         services.update_sale(self.deposit, {
             "sale_price": "1800000",
-            "paid_cash": "500000", "paid_pos": "300000",
+            "deposit_amount": "800000",
             "customer": "مریم", "customer_phone": "09121112222",
         })
         self.deposit.refresh_from_db()
@@ -284,7 +287,7 @@ class SaleDepositReceiptSyncTests(TestCase):
         self.assertEqual(self.receipt.pay_date, "2026-05-10")
 
     def test_fully_paid_deposit_edit_marks_settled_on_both(self):
-        services.update_sale(self.deposit, {"paid_cash": "1500000"})
+        services.update_sale(self.deposit, {"deposit_amount": "1500000"})
         self.deposit.refresh_from_db()
         self.receipt.refresh_from_db()
         self.assertTrue(self.deposit.is_settled)
@@ -293,7 +296,7 @@ class SaleDepositReceiptSyncTests(TestCase):
         self.assert_invariant(self.deposit)
 
     def test_price_raise_after_settlement_clears_the_stamp(self):
-        services.update_sale(self.deposit, {"paid_cash": "1500000"})   # settle
+        services.update_sale(self.deposit, {"deposit_amount": "1500000"})   # settle
         services.update_sale(self.deposit, {"sale_price": "2000000"})  # reopen
         self.deposit.refresh_from_db()
         self.receipt.refresh_from_db()
@@ -306,7 +309,7 @@ class SaleDepositReceiptSyncTests(TestCase):
             make_product(office_code="OF-C2", website_code="WS-C2").id))
         _, err = call(services.update_sale, cash_sale, {
             "payment_type": "deposit",
-            "paid_cash": "0", "paid_pos": "0", "paid_card2card": "0",
+            "deposit_amount": "0",
         })
         self.assertEqual(err.status_code, 400)
         self.assertIn("بیعانه", err.message)
@@ -319,14 +322,14 @@ class SaleDepositReceiptSyncTests(TestCase):
         # receipt's paid_amount — same rejection as on create now
         dep_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-Z1", website_code="WS-Z1").id,
-            payment_type="deposit", paid_cash="500000"))
+            payment_type="deposit", deposit_amount="500000"))
         receipt = Payment.objects.get(sale=dep_sale)
         _, err = call(services.update_sale, dep_sale, {
-            "paid_cash": "0", "paid_pos": "0", "paid_card2card": "0"})
+            "deposit_amount": "0"})
         self.assertEqual(err.status_code, 400)
         self.assertEqual(err.message, "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید")
         dep_sale.refresh_from_db()
-        self.assertEqual(dep_sale.paid_cash, 500000)
+        self.assertEqual(dep_sale.paid_amount, 500000)
         self.assertFalse(dep_sale.is_settled)
         receipt.refresh_from_db()
         self.assertEqual(receipt.paid_amount, 500000)
@@ -335,16 +338,16 @@ class SaleDepositReceiptSyncTests(TestCase):
         # F1: omitting the paid fields still falls back to stored values
         dep_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-Z2", website_code="WS-Z2").id,
-            payment_type="deposit", paid_cash="500000"))
+            payment_type="deposit", deposit_amount="500000"))
         services.update_sale(dep_sale, {"notes": "edit"})
         dep_sale.refresh_from_db()
-        self.assertEqual(dep_sale.paid_cash, 500000)
+        self.assertEqual(dep_sale.paid_amount, 500000)
 
     def test_cash_to_deposit_creates_receipt(self):
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-C3", website_code="WS-C3").id))
         services.update_sale(cash_sale, {
-            "payment_type": "deposit", "paid_cash": "600000"})
+            "payment_type": "deposit", "deposit_amount": "600000"})
         cash_sale.refresh_from_db()
         receipt = Payment.objects.get(sale=cash_sale)
         self.assertEqual(cash_sale.payment_type, "deposit")
@@ -358,7 +361,7 @@ class SaleDepositReceiptSyncTests(TestCase):
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-C4", website_code="WS-C4").id))
         services.update_sale(cash_sale, {
-            "payment_type": "deposit", "paid_cash": "1500000"})
+            "payment_type": "deposit", "deposit_amount": "1500000"})
         cash_sale.refresh_from_db()
         self.assertTrue(cash_sale.is_settled)
         receipt = Payment.objects.get(sale=cash_sale)
@@ -369,7 +372,7 @@ class SaleDepositReceiptSyncTests(TestCase):
         self.deposit.refresh_from_db()
         self.receipt.refresh_from_db()
         self.assertEqual(self.deposit.payment_type, "cash")
-        self.assertEqual(self.deposit.paid_cash, 1500000)
+        self.assertEqual(self.deposit.paid_amount, 1500000)
         self.assertTrue(self.deposit.is_settled)
         self.assertEqual(self.deposit.settled_at, today_iso())
         self.assertEqual(self.receipt.total_amount, 1500000)
@@ -394,7 +397,7 @@ class SaleDepositReceiptSyncTests(TestCase):
         p = make_product(office_code="OF-FP", website_code="WS-FP")
         sale, err = call(services.create_sale, sale_payload(
             p.id, payment_type="deposit", sale_price="1500000",
-            paid_cash="1500000"))
+            deposit_amount="1500000"))
         self.assertIsNone(err)
         self.assertTrue(sale.is_settled)
         receipt = Payment.objects.get(sale=sale)
@@ -405,11 +408,11 @@ class SaleDepositReceiptSyncTests(TestCase):
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-UP", website_code="WS-UP").id))
         _, err = call(services.update_sale, cash_sale, {
-            "paid_cash": "500000", "paid_pos": "500000"})
+            "deposit_amount": "500000"})
         self.assertEqual(err.status_code, 400)
         self.assertIn("نقدی", err.message)
         cash_sale.refresh_from_db()
-        self.assertEqual(cash_sale.paid_cash, 1500000)  # unchanged
+        self.assertEqual(cash_sale.paid_amount, 1500000)  # unchanged
         self.assertTrue(cash_sale.is_settled)
 
 
@@ -419,7 +422,7 @@ class SaleCashFullPaymentTests(TestCase):
     def test_create_cash_partial_breakdown_rejected(self):
         p = make_product()
         sale, err = call(services.create_sale, sale_payload(
-            p.id, sale_price="2000000", paid_cash="500000"))
+            p.id, sale_price="2000000", deposit_amount="500000"))
         self.assertEqual(err.status_code, 400)
         self.assertIn("برای فروش نقدی", err.message)
         self.assertIn("بیعانه", err.message)
@@ -427,18 +430,19 @@ class SaleCashFullPaymentTests(TestCase):
         self.assertTrue(Product.objects.get(id=p.id).available)
 
     def test_create_cash_full_breakdown_accepted(self):
+        # legacy buckets validated but not stored — paid_amount = price
         p = make_product()
         sale, err = call(services.create_sale, sale_payload(
             p.id, sale_price="2000000", paid_cash="500000",
             paid_pos="1500000"))
         self.assertIsNone(err)
         self.assertTrue(sale.is_settled)
-        self.assertEqual((sale.paid_cash, sale.paid_pos), (500000.0, 1500000.0))
+        self.assertEqual(sale.paid_amount, 2000000)
 
     def test_create_cash_without_breakdown_still_all_cash(self):
         p = make_product()
         sale, _ = call(services.create_sale, sale_payload(p.id))
-        self.assertEqual(sale.paid_cash, 1500000)
+        self.assertEqual(sale.paid_amount, 1500000)
 
     def test_update_price_change_with_stale_breakdown_resets_to_all_cash(self):
         cash_sale = services.create_sale(sale_payload(
@@ -446,30 +450,29 @@ class SaleCashFullPaymentTests(TestCase):
         services.update_sale(cash_sale, {"sale_price": "2000000"})
         cash_sale.refresh_from_db()
         self.assertEqual(cash_sale.sale_price, 2000000)
-        self.assertEqual(cash_sale.paid_cash, 2000000)  # reset, was 1500000
-        self.assertEqual(cash_sale.paid_pos, 0)
+        self.assertEqual(cash_sale.paid_amount, 2000000)  # reset, was 1500000
         self.assertTrue(cash_sale.is_settled)
 
     def test_update_price_change_with_matching_breakdown_kept(self):
+        # legacy buckets are validated but not stored — paid_amount tracks price
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-MB", website_code="WS-MB").id,
             paid_cash="0", paid_pos="1500000"))
         services.update_sale(cash_sale, {"sale_price": "2000000",
                                          "paid_pos": "2000000"})
         cash_sale.refresh_from_db()
-        self.assertEqual(cash_sale.paid_pos, 2000000)
-        self.assertEqual(cash_sale.paid_cash, 0)
+        self.assertEqual(cash_sale.paid_amount, 2000000)
         self.assertTrue(cash_sale.is_settled)
 
     def test_update_explicit_partial_breakdown_rejected(self):
         cash_sale = services.create_sale(sale_payload(
             make_product(office_code="OF-EP", website_code="WS-EP").id))
         _, err = call(services.update_sale, cash_sale, {
-            "paid_cash": "500000", "paid_pos": "500000"})
+            "deposit_amount": "500000"})
         self.assertEqual(err.status_code, 400)
         self.assertIn("برای فروش نقدی", err.message)
         cash_sale.refresh_from_db()
-        self.assertEqual(cash_sale.paid_cash, 1500000)
+        self.assertEqual(cash_sale.paid_amount, 1500000)
         self.assertTrue(cash_sale.is_settled)
 
     def test_legacy_partial_cash_row_rejected_on_edit(self):
@@ -479,22 +482,22 @@ class SaleCashFullPaymentTests(TestCase):
         legacy = Sale.objects.create(
             product=p, sale_price=2000, purchase_price=1000, profit=1000,
             sale_date=today_iso(), customer="x", customer_phone="09123456789",
-            paid_cash=500, payment_type="cash", is_settled=True)
+            paid_amount=500, payment_type="cash", is_settled=True)
         _, err = call(services.update_sale, legacy, {"notes": "edit"})
         self.assertEqual(err.status_code, 400)
         self.assertIn("برای فروش نقدی", err.message)
         legacy.refresh_from_db()
-        self.assertEqual(legacy.paid_cash, 500)
+        self.assertEqual(legacy.paid_amount, 500)
 
     def test_legacy_partial_cash_row_fixed_by_full_breakdown(self):
         p = make_product(office_code="OF-L2", website_code="WS-L2")
         legacy = Sale.objects.create(
             product=p, sale_price=2000, purchase_price=1000, profit=1000,
             sale_date=today_iso(), customer="x", customer_phone="09123456789",
-            paid_cash=500, payment_type="cash", is_settled=True)
+            paid_amount=500, payment_type="cash", is_settled=True)
         services.update_sale(legacy, {"paid_cash": "2000", "paid_pos": "0"})
         legacy.refresh_from_db()
-        self.assertEqual(legacy.paid_cash, 2000)
+        self.assertEqual(legacy.paid_amount, 2000)
         self.assertTrue(legacy.is_settled)
 
 
@@ -503,7 +506,7 @@ def _legacy_sale(product, customer, phone):
     return Sale.objects.create(
         product=product, sale_price=2000, purchase_price=1000, profit=1000,
         sale_date=today_iso(), customer=customer, customer_phone=phone,
-        paid_cash=2000, payment_type="cash", is_settled=True)
+        paid_amount=2000, payment_type="cash", is_settled=True)
 
 
 class SaleAlreadySoldGuardTests(TestCase):
@@ -664,16 +667,16 @@ class InvoiceCodePersistenceTests(TestCase):
         old = Sale.objects.create(
             product=p, sale_price=2000, purchase_price=1000, profit=1000,
             sale_date="2026-09-10", customer="x", customer_phone="09120000001",
-            paid_cash=2000, payment_type="cash", is_settled=True)  # no code
+            paid_amount=2000, payment_type="cash", is_settled=True)  # no code
         manual = Sale.objects.create(
             product=p, sale_price=2000, purchase_price=1000, profit=1000,
             sale_date="2026-09-11", customer="y", customer_phone="09120000002",
-            paid_cash=2000, payment_type="cash", is_settled=True,
+            paid_amount=2000, payment_type="cash", is_settled=True,
             invoice_code="KEEP-ME")
         nodate = Sale.objects.create(
             product=p, sale_price=2000, purchase_price=1000, profit=1000,
             sale_date="", customer="z", customer_phone="09120000003",
-            paid_cash=2000, payment_type="cash", is_settled=True)
+            paid_amount=2000, payment_type="cash", is_settled=True)
 
         mig.backfill_sale_codes(apps, None)
 

@@ -9,7 +9,7 @@ from inventory.models import Payment, Product, Sale
 from inventory.utils import clean, fa_money, fa_num, to_float, to_int
 
 from .common import (
-    ApiError, PAID_METHOD_FIELDS, _clean_ids, _merge_partial, _parse_iso_or_raise,
+    ApiError, _clean_ids, _merge_partial, _parse_iso_or_raise,
 )
 from .sales import _sync_settlement
 
@@ -129,16 +129,13 @@ def delete_payment(payment: Payment) -> None:
 def add_payment(payment: Payment, payload) -> Payment:
     """Add a new instalment amount to an existing payment record.
 
-    ``method`` (``cash`` | ``pos`` | ``card2card``, default ``cash``) routes
-    the amount into the matching paid bucket of the linked sale, keeping the
-    per-method totals correct.
+    The (ignored) ``method`` key is accepted for legacy clients but no
+    payment method is recorded: the amount is added to the receipt and to
+    the linked sale's ``paid_amount`` only.
     """
     amount = to_float(payload.get("amount"))
     if amount <= 0:
         raise ApiError(400, "مبلغ باید بیشتر از صفر باشد")
-    method = clean(payload.get("method")) or "cash"
-    if method not in PAID_METHOD_FIELDS:
-        method = "cash"
     with transaction.atomic():
         payment = Payment.objects.select_for_update().get(id=payment.id)
         remaining = payment.total_amount - payment.paid_amount
@@ -147,9 +144,8 @@ def add_payment(payment: Payment, payload) -> Payment:
         sale = None
         if payment.sale_id:
             sale = Sale.objects.select_for_update().get(id=payment.sale_id)
-            field = PAID_METHOD_FIELDS[method]
-            setattr(sale, field, (getattr(sale, field) or 0) + amount)
-            sale.save(update_fields=[field])
+            sale.paid_amount = (sale.paid_amount or 0) + amount
+            sale.save(update_fields=["paid_amount"])
         payment.paid_amount = payment.paid_amount + amount
         payment.save(update_fields=["paid_amount", "updated_at"])
         _sync_settlement(sale, payment)
@@ -159,13 +155,10 @@ def add_payment(payment: Payment, payload) -> Payment:
 def settle_payment_full(payment: Payment, payload=None) -> Payment:
     """Settle the whole remaining balance in one shot.
 
-    The remainder is added to the linked sale's matching paid bucket
-    (``method``, default ``cash``); sale and receipt are marked settled
-    through the shared helper.
+    The remainder is added to the linked sale's ``paid_amount``; sale and
+    receipt are marked settled through the shared helper.  The (ignored)
+    ``method`` key is accepted for legacy clients.
     """
-    method = clean((payload or {}).get("method")) or "cash"
-    if method not in PAID_METHOD_FIELDS:
-        method = "cash"
     with transaction.atomic():
         payment = Payment.objects.select_for_update().get(id=payment.id)
         remaining = payment.total_amount - payment.paid_amount
@@ -174,9 +167,8 @@ def settle_payment_full(payment: Payment, payload=None) -> Payment:
         sale = None
         if payment.sale_id:
             sale = Sale.objects.select_for_update().get(id=payment.sale_id)
-            field = PAID_METHOD_FIELDS[method]
-            setattr(sale, field, (getattr(sale, field) or 0) + remaining)
-            sale.save(update_fields=[field])
+            sale.paid_amount = payment.total_amount
+            sale.save(update_fields=["paid_amount"])
         payment.paid_amount = payment.total_amount
         payment.save(update_fields=["paid_amount", "updated_at"])
         _sync_settlement(sale, payment)

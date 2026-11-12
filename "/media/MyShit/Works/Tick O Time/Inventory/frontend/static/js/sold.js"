@@ -1,0 +1,13 @@
+  const payload = {};
+  new FormData(form).forEach((v, k) => { payload[k] = v; });
+  ["sale_price", "paid_amount"].forEach((k) => {
+    payload[k] = toEnDigits(payload[k] || "0").replace(/[^\d]/g, "") || "0";
+  });
+  payload.customer_phone = toEnDigits(payload.customer_phone || "").trim();
+  const type = form.querySelector('[name="payment_type"]').value;
+  if (type === "deposit") {
+    payload.deposit_amount = payload.paid_amount;
+    delete payload.paid_amount;
+  } else {
+    delete payload.paid_amount;
+  }

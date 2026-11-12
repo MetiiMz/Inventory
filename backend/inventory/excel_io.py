@@ -12,7 +12,8 @@ from openpyxl.utils import get_column_letter
 from inventory.jalali import gregorian_to_jalali, parse_jalali_date
 from inventory.models import Payment, Product, Repair, Sale, Tracking
 from inventory.utils import (
-    STATUS_FA, TRACKING_STATUS_FA,
+    PAYMENT_TYPE_FA, SALE_TYPE_FA, STATUS_FA, TRACKING_STATUS_FA,
+    credit_provider_fa,
 )
 
 PRODUCT_HEADERS = [
@@ -44,10 +45,8 @@ PAYMENTS_HEADERS = [
 SALES_HEADERS = ["کد دفتر فروشگاه", "کد انبار سایت", "رفرنس", "نام ساعت", "برند",
                  "قیمت خرید", "قیمت فروش", "سود",
                  "تاریخ فروش", "خریدار", "شماره تماس", "نوع فروش",
-                 "نقدی", "کارت‌خوان", "کارت به کارت", "نوع پرداخت", "یادداشت"]
-
-SALE_TYPE_FA = {"person": "حضوری", "online": "آنلاین"}
-PAYMENT_TYPE_FA = {"cash": "نقدی", "card": "کارت به کارت", "deposit": "بیعانه"}
+                 "نوع پرداخت", "مبلغ پرداخت‌شده", "مانده",
+                 "سرویس اعتباری", "کد رهگیری اعتباری", "یادداشت"]
 
 
 def _jdate_from_iso(iso):
@@ -138,6 +137,11 @@ def export_sales(path, fmt):
     recs = Sale.objects.select_related("product").order_by("-sale_date", "-id")
     for s in recs:
         p = s.product
+        paid_amount = float(s.paid_amount or 0)
+        remaining = max(0.0, float(s.sale_price or 0) - paid_amount)
+        tracking_code = ""
+        if s.payment_type == "credit" and s.credit_provider:
+            tracking_code = s.credit_tracking_code or ""
         rows.append([
             (p.office_code if p else "") or "",
             (p.website_code if p else "") or "",
@@ -148,8 +152,10 @@ def export_sales(path, fmt):
             _money(s.sale_price), _money(s.profit),
             _jdate_from_iso(s.sale_date), s.customer, s.customer_phone,
             SALE_TYPE_FA.get(s.sale_type, s.sale_type),
-            _money(s.paid_cash), _money(s.paid_pos), _money(s.paid_card2card),
-            PAYMENT_TYPE_FA.get(s.payment_type, s.payment_type), s.notes,
+            PAYMENT_TYPE_FA.get(s.payment_type, s.payment_type),
+            _money(paid_amount), _money(remaining),
+            credit_provider_fa(s.credit_provider) if s.credit_provider else "",
+            tracking_code, s.notes,
         ])
     if fmt == "xlsx":
         _export_xlsx(path, SALES_HEADERS, rows, "فروش")

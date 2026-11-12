@@ -223,9 +223,7 @@ function openEditModal(s) {
   const form = $("#sale-edit-form");
   form.reset();
   form.querySelector('[name="sale_price"]').value = s.sale_price ? faNum(Number(s.sale_price).toLocaleString("en-US")) : "";
-  form.querySelector('[name="paid_cash"]').value = s.paid_cash ? faNum(Number(s.paid_cash).toLocaleString("en-US")) : "";
-  form.querySelector('[name="paid_pos"]').value = s.paid_pos ? faNum(Number(s.paid_pos).toLocaleString("en-US")) : "";
-  form.querySelector('[name="paid_card2card"]').value = s.paid_card2card ? faNum(Number(s.paid_card2card).toLocaleString("en-US")) : "";
+  form.querySelector('[name="paid_amount"]').value = s.paid_amount ? faNum(Number(s.paid_amount).toLocaleString("en-US")) : "";
   form.querySelector('[name="customer"]').value = s.customer || "";
   form.querySelector('[name="customer_phone"]').value = s.customer_phone || "";
   form.querySelector('[name="sale_date"]').value = jFromIso(s.sale_date);
@@ -234,6 +232,13 @@ function openEditModal(s) {
   form.querySelector('[name="payment_type"]').value = s.payment_type || "cash";
   $$("#edit-payment-chips .chip").forEach((c) =>
     c.classList.toggle("active", c.dataset.pay === (s.payment_type || "cash")));
+  // مبلغ پرداخت فقط برای بیعانه نمایش داده شود
+  const paidField = $("#edit-paid-amount-field");
+  if (s.payment_type === "deposit") {
+    paidField.classList.remove("hidden");
+  } else {
+    paidField.classList.add("hidden");
+  }
   updateSaleEditHints();
   openModal("modal-sale-edit");
 }
@@ -243,6 +248,12 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
   if (!chip) return;
   $$("#edit-payment-chips .chip").forEach((c) => c.classList.toggle("active", c === chip));
   $("#sale-edit-form [name='payment_type']").value = chip.dataset.pay;
+  const paidField = $("#edit-paid-amount-field");
+  if (chip.dataset.pay === "deposit") {
+    paidField.classList.remove("hidden");
+  } else {
+    paidField.classList.add("hidden");
+  }
   updateSaleEditHints();
 });
 
@@ -254,9 +265,7 @@ function updateSaleEditHints() {
   const type = form.querySelector('[name="payment_type"]').value;
   const num = (v) => +toEnDigits(v || "").replace(/[^\d]/g, "") || 0;
   const total = num(form.querySelector('[name="sale_price"]').value);
-  const paid = num(form.querySelector('[name="paid_cash"]').value) +
-    num(form.querySelector('[name="paid_pos"]').value) +
-    num(form.querySelector('[name="paid_card2card"]').value);
+  const paid = num(form.querySelector('[name="paid_amount"]').value);
   if (type === "cash" && paid > 0 && paid < total - 0.001) {
     hint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
     hint.style.color = "var(--red)";
@@ -269,7 +278,7 @@ function updateSaleEditHints() {
   }
 }
 
-["sale_price", "paid_cash", "paid_pos", "paid_card2card"].forEach((name) => {
+["sale_price", "paid_amount"].forEach((name) => {
   $("#sale-edit-form").querySelector(`[name="${name}"]`)
     .addEventListener("input", updateSaleEditHints);
 });
@@ -279,10 +288,17 @@ $("#btn-save-edit").addEventListener("click", async () => {
   if (!form.reportValidity()) return;
   const payload = {};
   new FormData(form).forEach((v, k) => { payload[k] = v; });
-  ["sale_price", "paid_cash", "paid_pos", "paid_card2card"].forEach((k) => {
+  ["sale_price", "paid_amount"].forEach((k) => {
     payload[k] = toEnDigits(payload[k] || "0").replace(/[^\d]/g, "") || "0";
   });
   payload.customer_phone = toEnDigits(payload.customer_phone || "").trim();
+  const type = form.querySelector('[name="payment_type"]').value;
+  if (type === "deposit") {
+    payload.deposit_amount = payload.paid_amount;
+    delete payload.paid_amount;
+  } else {
+    delete payload.paid_amount;
+  }
   const btn = $("#btn-save-edit");
   btn.disabled = true;
   try {

@@ -27,8 +27,6 @@
   <select class="input" id="filter-payment" style="max-width:150px">
     <option value="">همه‌ی پرداخت‌ها</option>
     <option value="cash">نقدی</option>
-    <option value="pos">کارت‌خوان</option>
-    <option value="card2card">کارت به کارت</option>
     <option value="deposit">بیعانه</option>
   </select>
   <div class="field" style="min-width:120px">
@@ -141,13 +139,9 @@
               <button type="button" class="chip" data-pay="deposit">بیعانه</button>
             </div>
           </div>
-          <div class="field">
-            <label>روش‌های پرداخت و مبالغ (اختیاری)</label>
-            <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px">
-              <input class="input" name="paid_cash" inputmode="numeric" placeholder="نقدی">
-              <input class="input" name="paid_pos" inputmode="numeric" placeholder="کارت‌خوان (POS)">
-              <input class="input" name="paid_card2card" inputmode="numeric" placeholder="کارت به کارت">
-            </div>
+          <div class="field" id="edit-paid-amount-field">
+            <label id="edit-paid-amount-label">مبلغ پرداختی (بیعانه)</label>
+            <input class="input" name="paid_amount" inputmode="numeric" placeholder="مبلغ بپردازید">
             <span class="hint" id="sale-edit-paid-hint"></span>
           </div>
           <div class="field">

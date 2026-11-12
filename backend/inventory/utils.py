@@ -13,6 +13,96 @@ BACKUP_DIR = settings.BACKUP_DIR
 
 SALE_TYPE_FA = {"person": "حضوری", "online": "آنلاین"}
 
+# «تسویه کامل» / «بیعانه» / «اعتباری» — used by the API, Excel export and
+# the frontend (labels travel from the API).
+PAYMENT_TYPE_FA = {
+    "cash": "تسویه کامل",
+    "deposit": "بیعانه",
+    "credit": "اعتباری",
+}
+
+# Buy-now-pay-later services: key -> (Persian label, code prefix).
+# The stored tracking code is ``PREFIX-<raw code>`` so two services with the
+# same raw code never collide.
+CREDIT_PROVIDERS = {
+    "snappay": ("اسنپ‌پی", "S"),
+    "digipay": ("دیجی‌پی", "D"),
+    "torob": ("ترب‌پی", "T"),
+}
+
+# ---------------------------------------------------------------- credit
+def credit_provider_fa(provider):
+    """Persian label of a credit provider key, or ``""`` when unknown."""
+    return CREDIT_PROVIDERS.get(provider, ("", ""))[0]
+
+
+def credit_prefix(provider):
+    """Uppercase tracking-code prefix of a provider (``S``/``D``/``T``)."""
+    return CREDIT_PROVIDERS.get(provider, ("", ""))[1]
+
+
+def normalize_tracking_code(raw):
+    """Strip and convert Persian/Arabic digits to English digits."""
+    text = str(raw or "").strip()
+    return text.translate(
+        str.maketrans(
+            "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789"
+        )
+    )
+
+
+def build_tracking_code(provider, raw):
+    """``PREFIX-<raw>`` for storage; never doubles an already-present prefix.
+
+    ``provider`` must be a valid CREDIT_PROVIDERS key.  ``raw`` is the raw,
+    already-normalized code typed by the user.
+    """
+    prefix = credit_prefix(provider)
+    if not prefix:
+        return raw
+    if raw.upper().startswith(prefix + "-"):
+        return raw
+    return f"{prefix}-{raw}"
+
+
+def raw_tracking_code(stored):
+    """The user-typed part of a stored ``PREFIX-<raw>`` tracking code."""
+    stored = str(stored or "")
+    for prefix in ("S-", "D-", "T-"):
+        if stored.upper().startswith(prefix):
+            return stored[len(prefix):]
+    return stored
+
+
+_TRACKING_RE = r"^[A-Za-z0-9._-]+$"
+_TRACKING_MAX_LEN = 56
+
+
+def validate_tracking_code(provider, raw):
+    """Validate a raw tracking code for ``provider``; return normalized code.
+
+    Raises ``ApiError`` with the exact Persian messages from the spec.
+    """
+    from inventory.api.services.common import ApiError
+
+    if not provider or provider not in CREDIT_PROVIDERS:
+        raise ApiError(400, "سرویس اعتباری را انتخاب کنید")
+    code = normalize_tracking_code(raw)
+    if not code:
+        raise ApiError(400, "کد رهگیری پرداخت را وارد کنید")
+    if len(code) > _TRACKING_MAX_LEN:
+        raise ApiError(
+            400, "کد رهگیری نمی‌تواند بیش از ۵۶ نویسه باشد"
+        )
+    import re
+
+    if not re.match(_TRACKING_RE, code):
+        raise ApiError(
+            400,
+            "کد رهگیری فقط می‌تواند شامل حروف انگلیسی، عدد، نقطه و خط تیره باشد",
+        )
+    return code
+
 STATUS_FA = {
     "received": "دریافت شده", "in_progress": "در حال تعمیر",
     "waiting_parts": "انتظار قطعه", "done": "آماده تحویل", "delivered": "تحویل شده",
@@ -141,6 +231,8 @@ def invoice_code(sale_id, sale_date):
 
 def sale_dict(r, product=None):
     p = product or getattr(r, "product", None)
+    paid_amount = float(r.paid_amount or 0)
+    remaining = max(0.0, float(r.sale_price or 0) - paid_amount)
     d = {
         "id": r.id,
         "product_id": r.product_id,
@@ -152,9 +244,14 @@ def sale_dict(r, product=None):
         "customer_phone": r.customer_phone,
         "sale_type": r.sale_type,
         "payment_type": r.payment_type,
+        # legacy buckets: kept (untouched columns) but no UI uses them
         "paid_cash": r.paid_cash,
         "paid_pos": r.paid_pos,
         "paid_card2card": r.paid_card2card,
+        # the single amount paid so far
+        "paid_amount": paid_amount,
+        "paid_total": paid_amount,
+        "paid_total_display": fa_money(paid_amount),
         "is_settled": 1 if r.is_settled else 0,
         "settled_at": r.settled_at or "",
         "notes": r.notes,
@@ -170,17 +267,18 @@ def sale_dict(r, product=None):
         "settled_at_fa": fa_date(r.settled_at) if r.settled_at else "",
         "sale_price_display": fa_money(r.sale_price),
         "profit_display": fa_money(r.profit),
-        "paid_total": (r.paid_cash or 0) + (r.paid_pos or 0) + (r.paid_card2card or 0),
         "sale_type_fa": SALE_TYPE_FA.get(r.sale_type, r.sale_type),
-        "payment_type_fa": "بیعانه" if r.payment_type == "deposit" else "نقدی",
+        "payment_type_fa": PAYMENT_TYPE_FA.get(r.payment_type, r.payment_type),
+        "payment_remaining": remaining,
+        "payment_remaining_display": fa_money(remaining),
         "customer_phone_fa": fa_num(r.customer_phone),
+        # credit sale fields (empty unless payment_type == "credit")
+        "credit_provider": r.credit_provider or "",
+        "credit_provider_fa": credit_provider_fa(r.credit_provider or ""),
+        "credit_tracking_code": r.credit_tracking_code or "",
+        "credit_tracking_code_raw": raw_tracking_code(r.credit_tracking_code or ""),
     }
-    d["paid_total_display"] = fa_money(d["paid_total"])
-    d["paid_breakdown_fa"] = " + ".join(filter(None, [
-        "نقدی" if d["paid_cash"] else "",
-        "کارت‌خوان" if d["paid_pos"] else "",
-        "کارت به کارت" if d["paid_card2card"] else "",
-    ]))
+    d["paid_breakdown_fa"] = ""
     d["purchase_price_display"] = fa_money(r.purchase_price)
     # ریز بیعانه: سند پرداخت مرتبط (یک سند به‌ازای هر فروش بیعانه‌ای)
     pay = r.payments.first() if r.payment_type == "deposit" else None

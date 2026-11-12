@@ -50,6 +50,9 @@ class Sale(models.Model):
     paid_cash = models.FloatField(default=0)
     paid_pos = models.FloatField(default=0)
     paid_card2card = models.FloatField(default=0)
+    paid_amount = models.FloatField(default=0)
+    credit_provider = models.CharField(max_length=20, default="", blank=True)
+    credit_tracking_code = models.CharField(max_length=64, default="", blank=True)
     is_settled = models.BooleanField(default=True, db_index=True)
     settled_at = models.CharField(max_length=10, default="", blank=True)
     invoice_code = models.CharField(max_length=40, default="", blank=True)
@@ -61,6 +64,13 @@ class Sale(models.Model):
         indexes = [
             models.Index(fields=["-sale_date", "-id"]),
             models.Index(fields=["payment_type", "is_settled"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                condition=~models.Q(credit_tracking_code=""),
+                fields=["credit_tracking_code"],
+                name="uniq_sale_credit_tracking_code",
+            ),
         ]
 
 

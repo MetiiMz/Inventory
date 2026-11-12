@@ -278,9 +278,7 @@ function openSaleModal(p) {
   form.querySelector('[name="sale_date"]').value = todayJalaliStr();
   form.querySelector('[name="customer_phone"]').value = "";
   form.querySelector('[name="sale_type"]').value = "person";
-  form.querySelector('[name="paid_cash"]').value = "";
-  form.querySelector('[name="paid_pos"]').value = "";
-  form.querySelector('[name="paid_card2card"]').value = "";
+  form.querySelector('[name="paid_amount"]').value = "";
   form.querySelector('[name="payment_type"]').value = "cash";
   $$("#sale-payment-chips .chip").forEach((c) =>
     c.classList.toggle("active", c.dataset.pay === "cash"));
@@ -296,6 +294,16 @@ function updateSalePaymentFields() {
   const form = $("#sale-form");
   const type = form.querySelector('[name="payment_type"]').value;
   $("#deposit-fields").classList.toggle("hidden", type !== "deposit");
+  // مبلغ پرداخت فقط برای بیعانه نمایش داده شود
+  const paidField = form.querySelector('[name="paid_amount"]');
+  const paidLabel = $("#paid-amount-label");
+  if (type === "deposit") {
+    paidField.closest(".field").classList.remove("hidden");
+    paidLabel.textContent = "مبلغ بیعانه (دست‌کم)";
+  } else {
+    paidField.closest(".field").classList.add("hidden");
+    paidLabel.textContent = "مبلغ پرداختی (بیعانه)";
+  }
   updateSaleHints();
 }
 
@@ -324,9 +332,7 @@ function updateSaleHints() {
   const total = parseMoneyInput(form.querySelector('[name="sale_price"]'));
 
   const bdHint = $("#paid-breakdown-hint");
-  const paid = parseMoneyInput(form.querySelector('[name="paid_cash"]')) +
-    parseMoneyInput(form.querySelector('[name="paid_pos"]')) +
-    parseMoneyInput(form.querySelector('[name="paid_card2card"]'));
+  const paid = parseMoneyInput(form.querySelector('[name="paid_amount"]'));
 
   if (bdHint) {
     if (paid > total + 0.001) {
@@ -359,7 +365,7 @@ $("#sale-payment-chips").addEventListener("click", (e) => {
   updateSalePaymentFields();
 });
 $("#sale-form").addEventListener("input", (e) => {
-  if (["paid_cash", "paid_pos", "paid_card2card", "sale_price"].includes(e.target.name)) {
+  if (["paid_amount", "sale_price"].includes(e.target.name)) {
     updateSaleHints();
   }
 });
@@ -368,12 +374,9 @@ $("#btn-save-sale").addEventListener("click", async () => {
   const form = $("#sale-form");
   if (!form.reportValidity()) return;
   const paymentType = form.querySelector('[name="payment_type"]').value;
-  const paidCash = parseMoneyInput(form.querySelector('[name="paid_cash"]'));
-  const paidPos = parseMoneyInput(form.querySelector('[name="paid_pos"]'));
-  const paidCard2card = parseMoneyInput(form.querySelector('[name="paid_card2card"]'));
-  const paidNow = paidCash + paidPos + paidCard2card;
+  const paidNow = parseMoneyInput(form.querySelector('[name="paid_amount"]'));
   if (paymentType === "deposit" && paidNow < 1) {
-    toast("برای فروش بیعانه، مبلغ بیعانه را در روش‌های پرداخت وارد کنید", "error");
+    toast("برای فروش بیعانه، مبلغ بیعانه را وارد کنید", "error");
     return;
   }
   const payload = {
@@ -384,12 +387,12 @@ $("#btn-save-sale").addEventListener("click", async () => {
     customer_phone: toEnDigits(form.querySelector('[name="customer_phone"]').value).trim(),
     sale_type: form.querySelector('[name="sale_type"]').value,
     payment_type: paymentType,
-    paid_cash: String(paidCash),
-    paid_pos: String(paidPos),
-    paid_card2card: String(paidCard2card),
     notes: form.querySelector('[name="notes"]').value,
     invoice_code: form.querySelector('[name="invoice_code"]').value.trim(),
   };
+  if (paymentType === "deposit") {
+    payload.deposit_amount = String(paidNow);
+  }
   const btn = $("#btn-save-sale");
   btn.disabled = true;
   try {
@@ -536,8 +539,7 @@ $("#btn-run-import").addEventListener("click", async () => {
 document.addEventListener("DOMContentLoaded", () => {
   $$("#product-form [name='purchase_price'], "
     + "#sale-form [name='sale_price'], "
-    + "#sale-form [name='paid_cash'], #sale-form [name='paid_pos'], "
-    + "#sale-form [name='paid_card2card']")
+    + "#sale-form [name='paid_amount']")
     .forEach(bindMoneyInput);
   loadBrandFilter();
   loadProducts();

@@ -94,8 +94,8 @@ class SalePaymentDictTests(TestCase):
         s = Sale.objects.create(
             product=p, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            paid_cash=400, paid_pos=0, paid_card2card=0,
-            payment_type="deposit", is_settled=False, invoice_code="")
+            paid_amount=400, payment_type="deposit", is_settled=False,
+            invoice_code="")
         d = utils.sale_dict(s, p)
         # Spec-002: the discounted final-price keys are gone entirely
         self.assertNotIn("final_price", d)
@@ -104,7 +104,7 @@ class SalePaymentDictTests(TestCase):
         self.assertEqual(d["sale_price_display"], utils.fa_money(1500))
         self.assertEqual(d["paid_total"], 400)
         self.assertEqual(d["invoice_code"], utils.invoice_code(s.id, s.sale_date))
-        self.assertIn("نقدی", d["paid_breakdown_fa"])
+        self.assertEqual(d["paid_breakdown_fa"], "")
         self.assertEqual(d["payment_type_fa"], "بیعانه")
         self.assertEqual(d["product_name"], p.name)
         # no Payment receipt row exists here — deposit fields degrade to None
@@ -118,8 +118,8 @@ class SalePaymentDictTests(TestCase):
         s = Sale.objects.create(
             product=p, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            paid_cash=400, paid_pos=0, paid_card2card=0,
-            payment_type="deposit", is_settled=False, invoice_code="")
+            paid_amount=400, payment_type="deposit", is_settled=False,
+            invoice_code="")
         Payment.objects.create(
             sale=s, product=p, product_name=p.name,
             customer_name="علی", customer_phone="09123456789",
@@ -138,9 +138,8 @@ class SalePaymentDictTests(TestCase):
         s = Sale.objects.create(
             product=p, sale_price=1000, purchase_price=800, profit=200,
             sale_date=today_iso(), customer="مریم", customer_phone="09123456789",
-            paid_cash=500, paid_pos=0, paid_card2card=0,
-            payment_type="deposit", is_settled=True, settled_at=today_iso(),
-            invoice_code="")
+            paid_amount=500, payment_type="deposit", is_settled=True,
+            settled_at=today_iso(), invoice_code="")
         Payment.objects.create(
             sale=s, product=p, product_name=p.name,
             customer_name="مریم", customer_phone="09123456789",
@@ -158,8 +157,8 @@ class SalePaymentDictTests(TestCase):
         s = Sale.objects.create(
             product=p, sale_price=1500, purchase_price=1000, profit=500,
             sale_date=today_iso(), customer="علی", customer_phone="09123456789",
-            paid_cash=1500, paid_pos=0, paid_card2card=0,
-            payment_type="cash", is_settled=True, invoice_code="")
+            paid_amount=1500, payment_type="cash", is_settled=True,
+            invoice_code="")
         d = utils.sale_dict(s, p)
         for key in ("deposit_total_amount", "deposit_paid_amount",
                     "deposit_remaining"):

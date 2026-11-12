@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """Sale domain: query, invoice codes, CRUD and settlement side effects."""
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q, QuerySet
 from django.db.models.functions import Lower
 
 from inventory.jalali import parse_jalali_date, today_iso
 from inventory.models import Payment, Product, Sale
 from inventory.utils import (
-    SALE_TYPE_FA, clean, fa_money, invoice_code, to_en_phone,
-    to_float, to_int,
+    CREDIT_PROVIDERS, SALE_TYPE_FA, clean, fa_money, invoice_code,
+    to_en_phone, to_float, to_int,
 )
 
 from .common import (
@@ -33,18 +33,59 @@ _CASH_PARTIAL_MSG = ("برای فروش نقدی جمع پرداخت‌ها با
 # F1: a deposit needs an upfront amount — same rule on create and edit
 _DEPOSIT_MIN_MSG = "برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید"
 
+# M1: moving straight between deposit and credit is forbidden
+_DEPOSIT_CREDIT_SWITCH_MSG = (
+    "تغییر مستقیم بین بیعانه و اعتباری ممکن نیست؛ "
+    "فروش را حذف و دوباره ثبت کنید"
+)
+
+_LEGACY_BUCKETS = ("paid_cash", "paid_pos", "paid_card2card")
+
+
+def _legacy_paid_sum(payload) -> float:
+    """Sum of the legacy method buckets carried by a legacy API payload."""
+    return (max(0.0, to_float(payload.get("paid_cash")))
+            + max(0.0, to_float(payload.get("paid_pos")))
+            + max(0.0, to_float(payload.get("paid_card2card"))))
+
+
+def _has_legacy_breakdown(payload) -> bool:
+    """True when a legacy client still sends the per-method amounts."""
+    return any(field in payload for field in _LEGACY_BUCKETS)
+
+
+def _resolve_credit_code(provider, raw, exclude_id=None) -> str:
+    """Validate a raw credit tracking code, prefix it and enforce uniqueness.
+
+    The stored value is ``PREFIX-<raw>`` (e.g. ``D-4546851``).  Uniqueness is
+    case-insensitive on the stored value and excludes ``exclude_id`` (the sale
+    being edited).  Raises :class:`ApiError` with the exact Persian messages.
+    """
+    from inventory.utils import build_tracking_code, validate_tracking_code
+
+    stored = build_tracking_code(provider, validate_tracking_code(provider, raw))
+    qs = Sale.objects.filter(credit_tracking_code__iexact=stored)
+    if exclude_id is not None:
+        qs = qs.exclude(id=exclude_id)
+    if qs.exists():
+        raise ApiError(400, "این کد رهگیری قبلاً ثبت شده است")
+    return stored
+
 
 def sale_queryset(params) -> QuerySet:
     """Filtered/ordered sale list.
 
-    Parameters: ``q`` (product/customer/phone/codes/reference/invoice),
-    ``sale_type``, ``pay_method`` = ``cash`` | ``pos`` | ``card2card``,
-    ``date_from``/``date_to``, ``sort`` + ``dir``.  Deposits are always
-    included regardless of settlement state.
+    Parameters: ``q`` (product/customer/phone/codes/reference/invoice, also
+    the stored credit tracking code), ``sale_type``, ``pay_method`` =
+    ``cash`` | ``deposit`` | ``credit`` (legacy ``pos``/``card2card`` are
+    ignored), ``credit_provider`` = ``snappay`` | ``digipay`` | ``torob``
+    (implies credit), ``date_from``/``date_to``, ``sort`` + ``dir``.
+    Deposits are always included regardless of settlement state.
     """
     q = clean(params.get("q", ""))
     sale_type = clean(params.get("sale_type", ""))
     pay_method = clean(params.get("pay_method", ""))
+    credit_provider = clean(params.get("credit_provider", ""))
     date_from = clean(params.get("date_from", ""))
     date_to = clean(params.get("date_to", ""))
     sort = clean(params.get("sort", "")) or "date"
@@ -57,13 +98,19 @@ def sale_queryset(params) -> QuerySet:
             | Q(customer_phone__icontains=q) | Q(product__office_code__icontains=q)
             | Q(product__website_code__icontains=q) | Q(product__reference__icontains=q)
             | Q(invoice_code__icontains=q)
+            | Q(credit_tracking_code__icontains=q)
         )
     if sale_type in SALE_TYPE_FA:
         qs = qs.filter(sale_type=sale_type)
-    col = {"cash": "paid_cash", "pos": "paid_pos",
-           "card2card": "paid_card2card"}.get(pay_method)
-    if col:
-        qs = qs.filter(**{col + "__gt": 0})
+    if pay_method == "cash":
+        qs = qs.filter(payment_type="cash")
+    elif pay_method == "deposit":
+        qs = qs.filter(payment_type="deposit")
+    elif pay_method == "credit":
+        qs = qs.filter(payment_type="credit")
+    # legacy pay_method values (pos / card2card) are ignored: no filter
+    if credit_provider in CREDIT_PROVIDERS:
+        qs = qs.filter(payment_type="credit", credit_provider=credit_provider)
     if date_from:
         parsed = parse_jalali_date(date_from)
         if parsed:
@@ -114,8 +161,8 @@ def _sync_settlement(sale: Sale | None, payment: Payment | None = None) -> None:
 
     A balance of ``remaining <= 0.001`` counts as settled: ``settled_at`` is
     stamped with today's date (kept when it is already stamped); any open
-    balance clears the stamp.  The linked receipt's ``total/paid`` is the
-    source of truth when one is passed, otherwise the sale's own amounts.
+    balance clears the stamp.  When a receipt is passed its ``total/paid`` is
+    the source of truth; otherwise the sale's own ``paid_amount`` is used.
     Either row may be ``None`` (e.g. a standalone receipt has no sale).
     Must run inside ``transaction.atomic`` — reused by the payment endpoints.
     """
@@ -123,8 +170,7 @@ def _sync_settlement(sale: Sale | None, payment: Payment | None = None) -> None:
         remaining = payment.total_amount - payment.paid_amount
         settled_at = payment.settled_at
     else:
-        paid_total = sale.paid_cash + sale.paid_pos + sale.paid_card2card
-        remaining = sale.sale_price - paid_total
+        remaining = sale.sale_price - sale.paid_amount
         settled_at = sale.settled_at
     is_settled = remaining <= 0.001
     settled_at = (settled_at or today_iso()) if is_settled else ""
@@ -181,71 +227,101 @@ def create_sale(payload) -> Sale:
     if manual_invoice and Sale.objects.filter(invoice_code=manual_invoice).exists():
         raise ApiError(400, f"کد فاکتور «{manual_invoice}» قبلاً استفاده شده است")
 
-    if payment_kind == "deposit":
+    paid_amount = 0.0
+    credit_provider = ""
+    credit_tracking_code = ""
+
+    if payment_kind == "cash":
+        # LEGACY API CLIENTS: a payload that still carries the per-method
+        # buckets is validated as before, but the values are never stored.
+        if _has_legacy_breakdown(payload):
+            paid_now = _legacy_paid_sum(payload)
+            if paid_now > sale_price + 0.001:
+                raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                        f"({fa_money(sale_price)} تومان)")
+            if 0 < paid_now < sale_price - 0.001:
+                raise ApiError(400, _CASH_PARTIAL_MSG)
+        if "deposit_amount" in payload:
+            deposit_now = max(0.0, to_float(payload.get("deposit_amount")))
+            if deposit_now > sale_price + 0.001:
+                raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                    f"({fa_money(sale_price)} تومان)")
+            if 0 < deposit_now < sale_price - 0.001:
+                raise ApiError(400, _CASH_PARTIAL_MSG)
+        paid_amount = sale_price
+    elif payment_kind == "deposit":
+        if "deposit_amount" in payload:
+            paid_now = max(0.0, to_float(payload.get("deposit_amount")))
+        elif _has_legacy_breakdown(payload):
+            # LEGACY: the sum of the old buckets counts as the deposit.
+            paid_now = _legacy_paid_sum(payload)
+        else:
+            paid_now = 0.0
         if paid_now <= 0:
             raise ApiError(400, _DEPOSIT_MIN_MSG)
         if paid_now > sale_price + 0.001:
             raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
-                                f"({fa_money(sale_price)} تومان)")
-        is_settled = False
+                                    f"({fa_money(sale_price)} تومان)")
+        paid_amount = paid_now
     else:
-        if paid_now > sale_price + 0.001:
-            raise ApiError(400, "جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
-                                f"({fa_money(sale_price)} تومان)")
-        # a complete cash sale; without a breakdown everything counts as cash
-        if paid_now <= 0:
-            paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
-        elif paid_now < sale_price - 0.001:
-            # A4: a partial breakdown is a deposit, not a cash sale
-            raise ApiError(400, _CASH_PARTIAL_MSG)
-        payment_kind = "cash"
-        is_settled = True
+        # credit: buy-now-pay-later via Snapp Pay / Digi Pay / Torob Pay.
+        provider = clean(payload.get("credit_provider"))
+        raw = clean(payload.get("credit_tracking_code"))
+        credit_tracking_code = _resolve_credit_code(provider, raw)
+        credit_provider = provider
+        paid_amount = sale_price
 
-    with transaction.atomic():
-        # A7: lock the row and re-check — a stale tab, a second device or a
-        # direct API call must not double-sell a watch that is already sold
-        product = Product.objects.select_for_update().filter(id=pid).first()
-        if product is None:
-            raise ApiError(404, "محصول یافت نشد")
-        if not product.available:
-            raise ApiError(400, "این ساعت قبلاً فروخته شده است")
-        profit = sale_price - (product.purchase_price or 0)
-        sale = Sale.objects.create(
-            product=product, sale_price=sale_price,
-            purchase_price=product.purchase_price, profit=profit,
-            sale_date=parsed, customer=customer,
-            customer_phone=customer_phone, sale_type=sale_type,
-            payment_type=payment_kind,
-            paid_cash=paid_cash, paid_pos=paid_pos,
-            paid_card2card=paid_card2card, is_settled=is_settled,
-            notes=clean(payload.get("notes")), invoice_code=manual_invoice,
-        )
-        if not manual_invoice:
-            # B1: the auto code is persisted at creation so it can never
-            # change when the sale is edited later
-            code = invoice_code(sale.id, sale.sale_date)
-            # F3: a manual entry may already own this month's slot for this
-            # id — append a numeric suffix until the code is unique
-            candidate, n = code, 1
-            while (Sale.objects.exclude(id=sale.id)
-                   .filter(invoice_code=candidate).exists()):
-                n += 1
-                candidate = f"{code}-{n}"
-            sale.invoice_code = candidate
-            sale.save(update_fields=["invoice_code"])
-        if payment_kind == "deposit":
-            payment = Payment.objects.create(
-                sale=sale, product=product, product_name=product.name,
-                customer_name=customer, customer_phone=customer_phone,
-                total_amount=sale_price, paid_amount=paid_now,
-                pay_date=parsed,
-                notes=_deposit_note(sale.id, sale_price - paid_now),
+    try:
+        with transaction.atomic():
+            # A7: lock the row and re-check — a stale tab, a second device or a
+            # direct API call must not double-sell a watch that is already sold
+            product = Product.objects.select_for_update().filter(id=pid).first()
+            if product is None:
+                raise ApiError(404, "محصول یافت نشد")
+            if not product.available:
+                raise ApiError(400, "این ساعت قبلاً فروخته شده است")
+            profit = sale_price - (product.purchase_price or 0)
+            sale = Sale.objects.create(
+                product=product, sale_price=sale_price,
+                purchase_price=product.purchase_price, profit=profit,
+                sale_date=parsed, customer=customer,
+                customer_phone=customer_phone, sale_type=sale_type,
+                payment_type=payment_kind,
+                paid_amount=paid_amount,
+                credit_provider=credit_provider,
+                credit_tracking_code=credit_tracking_code,
+                is_settled=payment_kind != "deposit",
+                notes=clean(payload.get("notes")), invoice_code=manual_invoice,
             )
-            # a deposit paid in full at creation is already settled
-            _sync_settlement(sale, payment)
-        # this watch is sold — it becomes out-of-stock
-        Product.objects.filter(id=pid).update(available=False)
+            if not manual_invoice:
+                # B1: the auto code is persisted at creation so it can never
+                # change when the sale is edited later
+                code = invoice_code(sale.id, sale.sale_date)
+                # F3: a manual entry may already own this month's slot for this
+                # id — append a numeric suffix until the code is unique
+                candidate, n = code, 1
+                while (Sale.objects.exclude(id=sale.id)
+                       .filter(invoice_code=candidate).exists()):
+                    n += 1
+                    candidate = f"{code}-{n}"
+                sale.invoice_code = candidate
+                sale.save(update_fields=["invoice_code"])
+            payment = None
+            if payment_kind == "deposit":
+                payment = Payment.objects.create(
+                    sale=sale, product=product, product_name=product.name,
+                    customer_name=customer, customer_phone=customer_phone,
+                    total_amount=sale_price, paid_amount=paid_amount,
+                    pay_date=parsed,
+                    notes=_deposit_note(sale.id, sale_price - paid_amount),
+                )
+            # this watch is sold — it becomes out-of-stock
+            Product.objects.filter(id=pid).update(available=False)
+    except IntegrityError:
+        # DB-level uniqueness race on the credit tracking code.
+        raise ApiError(400, "این کد رهگیری قبلاً ثبت شده است")
 
+    _sync_settlement(sale, payment)
     return sale
 
 
@@ -256,13 +332,16 @@ def update_sale(sale: Sale, payload) -> Sale:
     behave identically.  The linked deposit receipt is kept in sync with the
     sale: editing a deposit updates its receipt, switching cash→deposit
     creates one (an upfront amount is required, as on create), and switching
-    deposit→cash settles the unpaid remainder into ``paid_cash``.  Settlement
+    deposit→cash settles the unpaid remainder into ``paid_amount``.  Settlement
     on the sale and the receipt is re-derived by ``_sync_settlement``.
     """
+    # ``deposit_amount`` is a payload-only key (not stored), so it is excluded
+    # from _merge_partial (which does getattr on the instance) and handled
+    # below with an explicit fallback to the current paid amount.
     payload = _merge_partial(payload, sale, (
-        "sale_price", "paid_cash", "paid_pos",
-        "paid_card2card", "sale_date", "customer", "customer_phone",
+        "sale_price", "sale_date", "customer", "customer_phone",
         "sale_type", "payment_type", "purchase_price", "notes",
+        "credit_provider", "credit_tracking_code",
     ))
     product = sale.product
 
@@ -270,45 +349,71 @@ def update_sale(sale: Sale, payload) -> Sale:
     if sale_price <= 0:
         raise ApiError(400, "قیمت فروش را وارد کنید")
     payment_kind = clean(payload.get("payment_type")) or sale.payment_type
-    if payment_kind not in ("cash", "deposit"):
+    if payment_kind not in ("cash", "deposit", "credit"):
         payment_kind = "cash"
     was_deposit = sale.payment_type == "deposit"
+    was_credit = sale.payment_type == "credit"
 
-    paid_cash = max(0.0, to_float(payload.get("paid_cash"), sale.paid_cash))
-    paid_pos = max(0.0, to_float(payload.get("paid_pos"), sale.paid_pos))
-    paid_card2card = max(0.0, to_float(payload.get("paid_card2card"), sale.paid_card2card))
-    paid_now = paid_cash + paid_pos + paid_card2card
-    if paid_now > sale_price + 0.001:
-        raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
-                            f"({fa_money(sale_price)} تومان)")
-    # a deposit sale must keep an upfront amount — same rule as create
-    # (F1: this used to fire only on cash→deposit, so editing a deposit
-    # to zero paid produced a receipt with paid_amount 0)
-    if payment_kind == "deposit" and paid_now <= 0:
-        raise ApiError(400, _DEPOSIT_MIN_MSG)
-    if paid_now <= 0 and payment_kind == "cash":
-        # a complete cash sale; without a breakdown everything counts as cash
-        paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
-        paid_now = sale_price
-    # deposit → cash: the unpaid remainder counts as a cash payment
-    if payment_kind == "cash" and was_deposit and paid_now < sale_price - 0.001:
-        paid_cash += sale_price - paid_now
-        paid_now = sale_price
-    # A4: a cash sale must be paid in full
+    # direct credit <-> deposit is forbidden
+    if (was_deposit and payment_kind == "credit"
+            or was_credit and payment_kind == "deposit"):
+        raise ApiError(400, _DEPOSIT_CREDIT_SWITCH_MSG)
+
+    paid_amount = float(sale.paid_amount or 0)
+    credit_provider = sale.credit_provider or ""
+    credit_tracking_code = sale.credit_tracking_code or ""
+    sale_price_changed = sale_price != float(sale.sale_price or 0)
+
     if payment_kind == "cash":
-        price_changed = abs(sale_price - sale.sale_price) > 0.001
-        breakdown_changed = (
-            abs(paid_cash - sale.paid_cash) > 0.001
-            or abs(paid_pos - sale.paid_pos) > 0.001
-            or abs(paid_card2card - sale.paid_card2card) > 0.001)
-        if (price_changed and not breakdown_changed
-                and paid_now < sale_price - 0.001):
-            # the stored breakdown no longer matches the new price and the
-            # client did not adjust it — reset to an all-cash payment
-            paid_cash, paid_pos, paid_card2card = sale_price, 0.0, 0.0
-            paid_now = sale_price
-        elif 0 < paid_now < sale_price - 0.001:
+        # LEGACY: legacy buckets are validated as before but never stored.
+        if _has_legacy_breakdown(payload):
+            legacy_sum = _legacy_paid_sum(payload)
+            if legacy_sum > sale_price + 0.001:
+                raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                    f"({fa_money(sale_price)} تومان)")
+            if 0 < legacy_sum < sale_price - 0.001:
+                raise ApiError(400, _CASH_PARTIAL_MSG)
+            paid_amount = legacy_sum
+        if "deposit_amount" in payload:
+            deposit_now = max(0.0, to_float(payload.get("deposit_amount")))
+            if deposit_now > sale_price + 0.001:
+                raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                    f"({fa_money(sale_price)} تومان)")
+            if 0 < deposit_now < sale_price - 0.001:
+                raise ApiError(400, _CASH_PARTIAL_MSG)
+            paid_amount = deposit_now
+        # price change or deposit → cash: the full amount is settled now
+        if sale_price_changed or was_deposit:
+            paid_amount = sale_price
+        credit_provider = ""
+        credit_tracking_code = ""
+        # a cash sale must be fully paid — reject partial legacy rows
+        if paid_amount != sale_price:
             raise ApiError(400, _CASH_PARTIAL_MSG)
+    elif payment_kind == "deposit":
+        if "deposit_amount" in payload:
+            paid_now = max(0.0, to_float(payload.get("deposit_amount")))
+        elif _has_legacy_breakdown(payload):
+            paid_now = _legacy_paid_sum(payload)
+        else:
+            paid_now = paid_amount
+        if paid_now <= 0:
+            raise ApiError(400, _DEPOSIT_MIN_MSG)
+        if paid_now > sale_price + 0.001:
+            raise ApiError(400, f"جمع پرداخت‌ها نمی‌تواند از قیمت فروش بیشتر باشد "
+                                f"({fa_money(sale_price)} تومان)")
+        paid_amount = paid_now
+        credit_provider = ""
+        credit_tracking_code = ""
+    else:
+        # credit: buy-now-pay-later; paid_amount == sale_price, settled.
+        if "credit_provider" in payload or "credit_tracking_code" in payload:
+            provider = clean(payload.get("credit_provider"))
+            raw = clean(payload.get("credit_tracking_code"))
+            credit_tracking_code = _resolve_credit_code(
+                provider, raw, exclude_id=sale.id)
+            credit_provider = provider
+        paid_amount = sale_price
 
     purchase_price = to_float(payload.get("purchase_price"),
                               product.purchase_price if product else 0)
@@ -325,6 +430,7 @@ def update_sale(sale: Sale, payload) -> Sale:
     _validate_buyer(customer, customer_phone)
 
     sale.sale_price = sale_price
+    sale.purchase_price = purchase_price
     sale.profit = profit
     sale.notes = clean(payload.get("notes"))
     sale.sale_date = parsed
@@ -332,38 +438,50 @@ def update_sale(sale: Sale, payload) -> Sale:
     sale.customer_phone = customer_phone
     sale.sale_type = sale_type
     sale.payment_type = payment_kind
-    sale.paid_cash = paid_cash
-    sale.paid_pos = paid_pos
-    sale.paid_card2card = paid_card2card
+    sale.paid_amount = paid_amount
+    sale.credit_provider = credit_provider
+    sale.credit_tracking_code = credit_tracking_code
 
     # the receipt the sale pays in instalments against (deposit sales)
-    receipt_paid = paid_now if payment_kind == "deposit" else sale_price
+    receipt_paid = paid_amount if payment_kind == "deposit" else sale_price
     with transaction.atomic():
         payment = sale.payments.first()
         if payment is None:
             if payment_kind == "deposit":
-                # cash → deposit (or a receipt that was deleted): create it
+                # cash/credit → deposit (or a receipt that was deleted)
                 payment = Payment.objects.create(
                     sale=sale, product=product,
                     product_name=product.name if product else "",
                     customer_name=customer, customer_phone=customer_phone,
-                    total_amount=sale_price, paid_amount=paid_now,
+                    total_amount=sale_price, paid_amount=paid_amount,
                     pay_date=parsed,
-                    notes=_deposit_note(sale.id, sale_price - paid_now),
+                    notes=_deposit_note(sale.id, sale_price - paid_amount),
                 )
         else:
-            # keep the receipt a faithful mirror of the deposit sale
-            payment.total_amount = sale_price
-            payment.paid_amount = receipt_paid
-            payment.customer_name = customer
-            payment.customer_phone = customer_phone
-            payment.pay_date = parsed
-            if (not payment.notes
-                    or payment.notes.startswith(f"بیعانه فروش #{sale.id}")):
-                payment.notes = _deposit_note(sale.id, sale_price - receipt_paid)
-            payment.save(update_fields=[
-                "total_amount", "paid_amount", "customer_name",
-                "customer_phone", "pay_date", "notes", "updated_at"])
+            if payment_kind != "deposit":
+                # deposit → cash/credit: close the receipt as settled today
+                payment.total_amount = sale_price
+                payment.paid_amount = sale_price
+                payment.customer_name = customer
+                payment.customer_phone = customer_phone
+                payment.pay_date = parsed
+                payment.notes = _deposit_note(sale.id, 0)
+                payment.save(update_fields=[
+                    "total_amount", "paid_amount", "customer_name",
+                    "customer_phone", "pay_date", "notes", "updated_at"])
+            else:
+                # keep the receipt a faithful mirror of the deposit sale
+                payment.total_amount = sale_price
+                payment.paid_amount = paid_amount
+                payment.customer_name = customer
+                payment.customer_phone = customer_phone
+                payment.pay_date = parsed
+                if (not payment.notes
+                        or payment.notes.startswith(f"بیعانه فروش #{sale.id}")):
+                    payment.notes = _deposit_note(sale.id, sale_price - paid_amount)
+                payment.save(update_fields=[
+                    "total_amount", "paid_amount", "customer_name",
+                    "customer_phone", "pay_date", "notes", "updated_at"])
         sale.save()
         _sync_settlement(sale, payment)
 
