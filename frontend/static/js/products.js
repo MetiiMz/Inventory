@@ -284,6 +284,7 @@ function openSaleModal(p) {
     c.classList.toggle("active", c.dataset.pay === "cash"));
   $("#pay-basis-hint").textContent = "فروش کامل — تسویه‌شده ثبت می‌شود";
   $("#invoice-code-hint").textContent = "";
+  $("#credit-fields").classList.add("hidden");
   updateSalePaymentFields();
   fetchInvoiceCode();
   openModal("modal-sale");
@@ -294,6 +295,7 @@ function updateSalePaymentFields() {
   const form = $("#sale-form");
   const type = form.querySelector('[name="payment_type"]').value;
   $("#deposit-fields").classList.toggle("hidden", type !== "deposit");
+  $("#credit-fields").classList.toggle("hidden", type !== "credit");
   // مبلغ پرداخت فقط برای بیعانه نمایش داده شود
   const paidField = form.querySelector('[name="paid_amount"]');
   const paidLabel = $("#paid-amount-label");
@@ -347,6 +349,9 @@ function updateSaleHints() {
     } else if (type === "deposit") {
       bdHint.textContent = "برای بیعانه، دست‌کم یکی از مبالغ را وارد کنید";
       bdHint.style.color = "";
+    } else if (type === "credit") {
+      bdHint.textContent = "فروش اعتباری — کل مبلغ در آینده تسویه می‌شود";
+      bdHint.style.color = "";
     } else {
       bdHint.textContent = "اگر خالی بماند، کل مبلغ نقدی ثبت می‌شود";
       bdHint.style.color = "";
@@ -361,7 +366,9 @@ $("#sale-payment-chips").addEventListener("click", (e) => {
   $("#sale-form [name='payment_type']").value = chip.dataset.pay;
   $("#pay-basis-hint").textContent = chip.dataset.pay === "deposit"
     ? "فروش بیعانه — مانده در «پرداخت‌ها» پیگیری می‌شود"
-    : "فروش کامل — تسویه‌شده ثبت می‌شود";
+    : chip.dataset.pay === "credit"
+      ? "فروش اعتباری — پرداخت در آینده تسویه می‌شود"
+      : "فروش کامل — تسویه‌شده ثبت می‌شود";
   updateSalePaymentFields();
 });
 $("#sale-form").addEventListener("input", (e) => {
@@ -392,6 +399,10 @@ $("#btn-save-sale").addEventListener("click", async () => {
   };
   if (paymentType === "deposit") {
     payload.deposit_amount = String(paidNow);
+  }
+  if (paymentType === "credit") {
+    payload.credit_provider = form.querySelector('#sale-credit-provider-chips .chip.active')?.dataset.provider || "D";
+    payload.credit_tracking_code = form.querySelector('[name="credit_tracking_code"]').value.trim();
   }
   const btn = $("#btn-save-sale");
   btn.disabled = true;

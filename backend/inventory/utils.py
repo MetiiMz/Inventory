@@ -244,10 +244,6 @@ def sale_dict(r, product=None):
         "customer_phone": r.customer_phone,
         "sale_type": r.sale_type,
         "payment_type": r.payment_type,
-        # legacy buckets: kept (untouched columns) but no UI uses them
-        "paid_cash": r.paid_cash,
-        "paid_pos": r.paid_pos,
-        "paid_card2card": r.paid_card2card,
         # the single amount paid so far
         "paid_amount": paid_amount,
         "paid_total": paid_amount,

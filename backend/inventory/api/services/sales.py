@@ -9,7 +9,7 @@ from inventory.jalali import parse_jalali_date, today_iso
 from inventory.models import Payment, Product, Sale
 from inventory.utils import (
     CREDIT_PROVIDERS, SALE_TYPE_FA, clean, fa_money, invoice_code,
-    to_en_phone, to_float, to_int,
+    raw_tracking_code, to_en_phone, to_float, to_int,
 )
 
 from .common import (
@@ -193,7 +193,10 @@ def create_sale(payload) -> Sale:
     if not pid:
         raise ApiError(400, "محصول انتخاب نشده است")
 
-    payment_kind = "deposit" if clean(payload.get("payment_type")) == "deposit" else "cash"
+    pt = clean(payload.get("payment_type"))
+    if pt not in ("cash", "deposit", "credit"):
+        pt = "cash"
+    payment_kind = pt
 
     product = Product.objects.filter(id=pid).first()
     if product is None:
@@ -407,12 +410,15 @@ def update_sale(sale: Sale, payload) -> Sale:
         credit_tracking_code = ""
     else:
         # credit: buy-now-pay-later; paid_amount == sale_price, settled.
-        if "credit_provider" in payload or "credit_tracking_code" in payload:
-            provider = clean(payload.get("credit_provider"))
-            raw = clean(payload.get("credit_tracking_code"))
-            credit_tracking_code = _resolve_credit_code(
-                provider, raw, exclude_id=sale.id)
-            credit_provider = provider
+        provider = clean(payload.get("credit_provider")) or credit_provider
+        raw = clean(payload.get("credit_tracking_code")) or raw_tracking_code(credit_tracking_code)
+        if not provider or provider not in CREDIT_PROVIDERS:
+            raise ApiError(400, "سرویس اعتباری را انتخاب کنید")
+        if not raw:
+            raise ApiError(400, "کد رهگیری پرداخت را وارد کنید")
+        credit_tracking_code = _resolve_credit_code(
+            provider, raw, exclude_id=sale.id)
+        credit_provider = provider
         paid_amount = sale_price
 
     purchase_price = to_float(payload.get("purchase_price"),

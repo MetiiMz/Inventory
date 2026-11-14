@@ -690,3 +690,115 @@ class InvoiceCodePersistenceTests(TestCase):
         mig.backfill_sale_codes(apps, None)
         old.refresh_from_db()
         self.assertEqual(old.invoice_code, f"TT-140506-{old.id:04d}")
+
+
+class CreditSaleCreateTests(TestCase):
+    """Credit sale (buy-now-pay-later) creation rules."""
+
+    def test_credit_sale_created_settled_with_full_amount(self):
+        p = make_product(available=True)
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, payment_type="credit",
+            credit_provider="digipay",
+            credit_tracking_code="4546851"))
+        self.assertIsNone(err)
+        self.assertTrue(sale.is_settled)
+        self.assertEqual(sale.payment_type, "credit")
+        self.assertEqual(sale.credit_provider, "digipay")
+        self.assertEqual(sale.credit_tracking_code, "D-4546851")
+        self.assertEqual(float(sale.paid_amount), float(sale.sale_price))
+        self.assertFalse(Product.objects.get(id=p.id).available)
+
+    def test_credit_sale_requires_provider(self):
+        p = make_product(available=True)
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, payment_type="credit",
+            credit_tracking_code="4546851"))
+        self.assertIsNone(sale)
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("سرویس اعتباری", str(err))
+
+    def test_credit_sale_requires_tracking_code(self):
+        p = make_product(available=True)
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, payment_type="credit",
+            credit_provider="digipay"))
+        self.assertIsNone(sale)
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("کد رهگیری", str(err))
+
+    def test_credit_sale_rejects_invalid_provider(self):
+        p = make_product(available=True)
+        sale, err = call(services.create_sale, sale_payload(
+            p.id, payment_type="credit",
+            credit_provider="INVALID",
+            credit_tracking_code="4546851"))
+        self.assertIsNone(sale)
+        self.assertEqual(err.status_code, 400)
+
+    def test_credit_sale_rejects_duplicate_tracking_code(self):
+        p1 = make_product(office_code="OF-C1", website_code="WS-C1")
+        p2 = make_product(office_code="OF-C2", website_code="WS-C2")
+        services.create_sale(sale_payload(
+            p1.id, payment_type="credit",
+            credit_provider="digipay", credit_tracking_code="4546851"))
+        sale, err = call(services.create_sale, sale_payload(
+            p2.id, payment_type="credit",
+            credit_provider="digipay", credit_tracking_code="4546851"))
+        self.assertIsNone(sale)
+        self.assertEqual(err.status_code, 400)
+        self.assertIn("ثبت شده است", str(err))
+
+    def test_credit_sale_appears_in_credit_filter(self):
+        p = make_product()
+        sale = services.create_sale(sale_payload(
+            p.id, payment_type="credit",
+            credit_provider="snappay", credit_tracking_code="111222"))
+        ids = list(services.sale_queryset(
+            {"pay_method": "credit"}).values_list("id", flat=True))
+        self.assertIn(sale.id, ids)
+        # cash filter should NOT include it
+        ids_cash = list(services.sale_queryset(
+            {"pay_method": "cash"}).values_list("id", flat=True))
+        self.assertNotIn(sale.id, ids_cash)
+
+
+class CreditSaleUpdateTests(TestCase):
+    """Credit sale update / transition rules."""
+
+    def test_update_cash_to_credit_requires_provider_and_code(self):
+        p = make_product()
+        sale = services.create_sale(sale_payload(p.id, payment_type="cash"))
+        updated, err = call(services.update_sale, sale, {
+            "payment_type": "credit",
+        })
+        self.assertIsNone(updated)
+        self.assertEqual(err.status_code, 400)
+
+    def test_update_cash_to_credit_with_valid_fields(self):
+        p = make_product()
+        sale = services.create_sale(sale_payload(p.id, payment_type="cash"))
+        updated, err = call(services.update_sale, sale, {
+            "payment_type": "credit",
+            "credit_provider": "digipay",
+            "credit_tracking_code": "4546851",
+        })
+        self.assertIsNone(err)
+        self.assertEqual(updated.payment_type, "credit")
+        self.assertEqual(updated.credit_provider, "digipay")
+        self.assertEqual(updated.credit_tracking_code, "D-4546851")
+        self.assertTrue(updated.is_settled)
+        self.assertEqual(float(updated.paid_amount), float(updated.sale_price))
+
+    def test_update_credit_to_cash_clears_credit_fields(self):
+        p = make_product()
+        sale = services.create_sale(sale_payload(
+            p.id, payment_type="credit",
+            credit_provider="digipay", credit_tracking_code="4546851"))
+        updated, err = call(services.update_sale, sale, {
+            "payment_type": "cash",
+        })
+        self.assertIsNone(err)
+        self.assertEqual(updated.payment_type, "cash")
+        self.assertEqual(updated.credit_provider, "")
+        self.assertEqual(updated.credit_tracking_code, "")

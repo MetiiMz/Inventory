@@ -221,8 +221,9 @@
           <div class="field">
             <label>نوع پرداخت</label>
             <div class="chip-row" id="sale-payment-chips">
-              <button type="button" class="chip active" data-pay="cash">نقدی</button>
+              <button type="button" class="chip active" data-pay="cash">تسویه کامل</button>
               <button type="button" class="chip" data-pay="deposit">بیعانه</button>
+              <button type="button" class="chip" data-pay="credit">اعتباری</button>
             </div>
             <span class="hint" id="pay-basis-hint">فروش کامل — تسویه‌شده ثبت می‌شود</span>
 
@@ -231,6 +232,21 @@
               <label id="paid-amount-label">مبلغ پرداختی (بیعانه)</label>
               <input class="input" name="paid_amount" inputmode="numeric" placeholder="مبلغ بپردازید">
               <span class="hint" id="paid-breakdown-hint"></span>
+            </div>
+
+            <!-- اعتباری: سرویس و کد رهگیری (فقط برای فروش اعتباری) -->
+            <div class="field hidden" id="credit-fields" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--hairline)">
+              <label>سرویس اعتباری</label>
+              <div class="chip-row" id="sale-credit-provider-chips">
+                <button type="button" class="chip active" data-provider="digipay">دیجی‌پی</button>
+                <button type="button" class="chip" data-provider="snappay">اسنپ‌پی</button>
+                <button type="button" class="chip" data-provider="torob">ترب‌پی</button>
+              </div>
+              <div class="field" style="margin-top:8px">
+                <label>کد رهگیری پرداخت</label>
+                <input class="input" name="credit_tracking_code" inputmode="numeric" placeholder="مثلاً 4546851">
+                <span class="hint">کد رهگیری ۶ رقمی پرداخت</span>
+              </div>
             </div>
           </div>
 

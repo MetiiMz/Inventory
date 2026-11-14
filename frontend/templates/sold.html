@@ -4,7 +4,7 @@
 <header class="topbar">
   <div>
     <h1>فروش‌ها</h1>
-    <div class="subtitle">همه‌ی فروش‌ها (نقدی و بیعانه) — با کلیک روی هر ردیف، جزئیات کامل را ببینید</div>
+    <div class="subtitle">همه‌ی فروش‌ها (تسویه، بیعانه و اعتباری) — با کلیک روی هر ردیف، جزئیات کامل را ببینید</div>
   </div>
   <div class="topbar-actions">
     <button class="btn" id="btn-export">
@@ -26,8 +26,9 @@
   </select>
   <select class="input" id="filter-payment" style="max-width:150px">
     <option value="">همه‌ی پرداخت‌ها</option>
-    <option value="cash">نقدی</option>
+    <option value="cash">تسویه کامل</option>
     <option value="deposit">بیعانه</option>
+    <option value="credit">اعتباری</option>
   </select>
   <div class="field" style="min-width:120px">
     <input class="input" id="filter-date-from" placeholder="از تاریخ…" inputmode="numeric">
@@ -135,14 +136,28 @@
           <div class="field">
             <label>نوع پرداخت</label>
             <div class="chip-row" id="edit-payment-chips">
-              <button type="button" class="chip active" data-pay="cash">نقدی</button>
+              <button type="button" class="chip active" data-pay="cash">تسویه کامل</button>
               <button type="button" class="chip" data-pay="deposit">بیعانه</button>
+              <button type="button" class="chip" data-pay="credit">اعتباری</button>
             </div>
           </div>
           <div class="field" id="edit-paid-amount-field">
             <label id="edit-paid-amount-label">مبلغ پرداختی (بیعانه)</label>
             <input class="input" name="paid_amount" inputmode="numeric" placeholder="مبلغ بپردازید">
             <span class="hint" id="sale-edit-paid-hint"></span>
+          </div>
+          <div class="field hidden" id="edit-credit-fields" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--hairline)">
+            <label>سرویس اعتباری</label>
+            <div class="chip-row" id="edit-credit-provider-chips">
+              <button type="button" class="chip active" data-provider="digipay">دیجی‌پی</button>
+              <button type="button" class="chip" data-provider="snappay">اسنپ‌پی</button>
+              <button type="button" class="chip" data-provider="torob">ترب‌پی</button>
+            </div>
+            <div class="field" style="margin-top:8px">
+              <label>کد رهگیری پرداخت</label>
+              <input class="input" name="credit_tracking_code" inputmode="numeric" placeholder="مثلاً 4546851">
+              <span class="hint">کد رهگیری ۶ رقمی پرداخت</span>
+            </div>
           </div>
           <div class="field">
             <label>خریدار</label>

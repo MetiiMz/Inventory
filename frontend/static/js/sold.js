@@ -6,8 +6,9 @@
 "use strict";
 
 const PAYMENT_BADGE = {
-  cash: ["green", "نقدی"],
+  cash: ["green", "تسویه کامل"],
   deposit: ["amber", "بیعانه"],
+  credit: ["blue", "اعتباری"],
 };
 
 let salesData = { items: [], summary: {} };
@@ -239,6 +240,17 @@ function openEditModal(s) {
   } else {
     paidField.classList.add("hidden");
   }
+  // اعتباری: نمایش فیلدهای سرویس و کد رهگیری
+  const creditField = $("#edit-credit-fields");
+  if (s.payment_type === "credit") {
+    creditField.classList.remove("hidden");
+    const provider = s.credit_provider || "D";
+    $$("#edit-credit-provider-chips .chip").forEach((c) =>
+      c.classList.toggle("active", c.dataset.provider === provider));
+    $("#edit-credit-fields [name='credit_tracking_code']").value = s.credit_tracking_code_raw || s.credit_tracking_code || "";
+  } else {
+    creditField.classList.add("hidden");
+  }
   updateSaleEditHints();
   openModal("modal-sale-edit");
 }
@@ -253,6 +265,12 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
     paidField.classList.remove("hidden");
   } else {
     paidField.classList.add("hidden");
+  }
+  const creditField = $("#edit-credit-fields");
+  if (chip.dataset.pay === "credit") {
+    creditField.classList.remove("hidden");
+  } else {
+    creditField.classList.add("hidden");
   }
   updateSaleEditHints();
 });
@@ -295,6 +313,10 @@ $("#btn-save-edit").addEventListener("click", async () => {
   const type = form.querySelector('[name="payment_type"]').value;
   if (type === "deposit") {
     payload.deposit_amount = payload.paid_amount;
+    delete payload.paid_amount;
+  } else if (type === "credit") {
+    payload.credit_provider = form.querySelector('#edit-credit-provider-chips .chip.active')?.dataset.provider || "D";
+    payload.credit_tracking_code = form.querySelector('[name="credit_tracking_code"]').value.trim();
     delete payload.paid_amount;
   } else {
     delete payload.paid_amount;
