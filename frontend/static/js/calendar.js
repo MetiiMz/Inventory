@@ -172,8 +172,11 @@ function showEventDetail(kind, id) {
     add("خریدار", esc(d.customer));
     add("شماره تماس خریدار", d.customer_phone_fa || "");
     add("نوع فروش", d.sale_type_fa || "");
-    add("روش پرداخت", d.payment_type_fa || "");
-    if (d.payment_type === "deposit") {
+    add("نوع پرداخت", d.payment_type_fa || "");
+    if (d.payment_type === "credit") {
+      add("سرویس", esc(d.credit_provider_fa));
+      add("کد رهگیری", `<span class="code-pill" dir="ltr">${esc(d.credit_tracking_code)}</span>`);
+    } else if (d.payment_type === "deposit") {
       add("وضعیت تسویه", d.is_settled
         ? '<span class="badge green plain">تسویه شده</span>'
         : '<span class="badge amber plain">در انتظار تسویه</span>');

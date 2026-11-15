@@ -282,6 +282,9 @@ function openSaleModal(p) {
   form.querySelector('[name="payment_type"]').value = "cash";
   $$("#sale-payment-chips .chip").forEach((c) =>
     c.classList.toggle("active", c.dataset.pay === "cash"));
+  $$("#sale-credit-provider-chips .chip").forEach((c) =>
+    c.classList.remove("active"));
+  form.querySelector('[name="credit_provider"]').value = "";
   $("#pay-basis-hint").textContent = "فروش کامل — تسویه‌شده ثبت می‌شود";
   $("#invoice-code-hint").textContent = "";
   $("#credit-fields").classList.add("hidden");
@@ -350,10 +353,10 @@ function updateSaleHints() {
       bdHint.textContent = "برای بیعانه، دست‌کم یکی از مبالغ را وارد کنید";
       bdHint.style.color = "";
     } else if (type === "credit") {
-      bdHint.textContent = "فروش اعتباری — کل مبلغ در آینده تسویه می‌شود";
+      bdHint.textContent = "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید.";
       bdHint.style.color = "";
     } else {
-      bdHint.textContent = "اگر خالی بماند، کل مبلغ نقدی ثبت می‌شود";
+      bdHint.textContent = "";
       bdHint.style.color = "";
     }
   }
@@ -369,8 +372,56 @@ $("#sale-payment-chips").addEventListener("click", (e) => {
     : chip.dataset.pay === "credit"
       ? "فروش اعتباری — پرداخت در آینده تسویه می‌شود"
       : "فروش کامل — تسویه‌شده ثبت می‌شود";
+  if (chip.dataset.pay !== "credit") {
+    $$("#sale-credit-provider-chips .chip").forEach((c) => c.classList.remove("active"));
+    $("#sale-credit-provider-chips").removeAttribute("role");
+    $("#sale-form [name='credit_provider']").value = "";
+    const pre = $("#sale-form .code-preview");
+    if (pre) pre.style.display = "none";
+  }
   updateSalePaymentFields();
 });
+  /* credit provider chips (sale form) */
+  $("#sale-credit-provider-chips").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    $$("#sale-credit-provider-chips .chip").forEach((c) => {
+      const active = c === chip;
+      c.classList.toggle("active", active);
+      c.setAttribute("role", "radio");
+      c.setAttribute("aria-checked", String(active));
+    });
+    $("#sale-credit-provider-chips").setAttribute("role", "radiogroup");
+    $("#sale-form [name='credit_provider']").value = chip.dataset.provider;
+    updateCreditPreview("sale-form");
+  });
+
+  function updateCreditPreview(formId) {
+    const form = $(`#${formId}`);
+    if (!form) return;
+    const providerInput = form.querySelector("[name='credit_provider']");
+    const codeInput = form.querySelector("[name='credit_tracking_code']");
+    const preview = form.querySelector(".code-preview");
+    const previewCode = form.querySelector(".preview-code");
+    if (!providerInput || !codeInput || !preview) return;
+    const provider = providerInput.value;
+    const raw = codeInput.value.trim();
+    if (!provider || !raw) {
+      preview.style.display = "none";
+      return;
+    }
+    const prefix = { digipay: "D", snappay: "S", torob: "T" }[provider] || "";
+    let code = raw.toUpperCase();
+    if (code.startsWith(prefix + "-")) code = code.slice(prefix.length + 1);
+    const full = prefix ? `${prefix}-${code}` : code;
+    previewCode.textContent = full;
+    preview.style.display = "";
+  }
+
+  $("#sale-form [name='credit_tracking_code']").addEventListener("input", (e) => {
+    updateCreditPreview("sale-form");
+  });
+
 $("#sale-form").addEventListener("input", (e) => {
   if (["paid_amount", "sale_price"].includes(e.target.name)) {
     updateSaleHints();
@@ -397,14 +448,15 @@ $("#btn-save-sale").addEventListener("click", async () => {
     notes: form.querySelector('[name="notes"]').value,
     invoice_code: form.querySelector('[name="invoice_code"]').value.trim(),
   };
-  if (paymentType === "deposit") {
-    payload.deposit_amount = String(paidNow);
-  }
-  if (paymentType === "credit") {
-    payload.credit_provider = form.querySelector('#sale-credit-provider-chips .chip.active')?.dataset.provider || "D";
-    payload.credit_tracking_code = form.querySelector('[name="credit_tracking_code"]').value.trim();
-  }
   const btn = $("#btn-save-sale");
+  if (paymentType === "credit") {
+    const cp = form.querySelector("[name='credit_provider']").value;
+    const ct = form.querySelector("[name='credit_tracking_code']").value.trim();
+    if (!cp) { toast("سرویس اعتباری را انتخاب کنید", "error"); btn.disabled = false; return; }
+    if (!ct) { toast("کد رهگیری پرداخت را وارد کنید", "error"); btn.disabled = false; return; }
+    payload.credit_provider = cp;
+    payload.credit_tracking_code = ct;
+  }
   btn.disabled = true;
   try {
     const res = await api("/api/sales", { method: "POST", body: payload });

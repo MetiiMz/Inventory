@@ -30,6 +30,12 @@
     <option value="deposit">بیعانه</option>
     <option value="credit">اعتباری</option>
   </select>
+  <select class="input" id="filter-credit-service" style="max-width:130px">
+    <option value="">همه‌ی سرویس‌ها</option>
+    <option value="snappay">اسنپ‌پی</option>
+    <option value="digipay">دیجی‌پی</option>
+    <option value="torob">ترب‌پی</option>
+  </select>
   <div class="field" style="min-width:120px">
     <input class="input" id="filter-date-from" placeholder="از تاریخ…" inputmode="numeric">
   </div>
@@ -128,6 +134,7 @@
     <div class="modal-body">
       <form id="sale-edit-form" autocomplete="off">
         <input type="hidden" name="payment_type" value="cash">
+        <input type="hidden" name="credit_provider">
         <div class="form-grid" style="grid-template-columns:1fr">
           <div class="field">
             <label>قیمت فروش (تومان) *</label>
@@ -146,17 +153,18 @@
             <input class="input" name="paid_amount" inputmode="numeric" placeholder="مبلغ بپردازید">
             <span class="hint" id="sale-edit-paid-hint"></span>
           </div>
-          <div class="field hidden" id="edit-credit-fields" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--hairline)">
+            <div class="field hidden" id="edit-credit-fields" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--hairline)">
             <label>سرویس اعتباری</label>
             <div class="chip-row" id="edit-credit-provider-chips">
-              <button type="button" class="chip active" data-provider="digipay">دیجی‌پی</button>
+              <button type="button" class="chip" data-provider="digipay">دیجی‌پی</button>
               <button type="button" class="chip" data-provider="snappay">اسنپ‌پی</button>
               <button type="button" class="chip" data-provider="torob">ترب‌پی</button>
             </div>
             <div class="field" style="margin-top:8px">
               <label>کد رهگیری پرداخت</label>
-              <input class="input" name="credit_tracking_code" inputmode="numeric" placeholder="مثلاً 4546851">
-              <span class="hint">کد رهگیری ۶ رقمی پرداخت</span>
+              <input class="input" name="credit_tracking_code" inputmode="text" dir="ltr" placeholder="مثلاً 4546851" maxlength="56">
+              <span class="hint">کد رهگیری را همان‌طور که سرویس داده وارد کنید؛ پیشوند سرویس خودکار اضافه می‌شود</span>
+              <span class="code-preview" style="display:none;margin-top:4px;font-size:11.5px;color:var(--text-3)"><b>کد ثبت‌شده:</b> <span class="preview-code" dir="ltr"></span></span>
             </div>
           </div>
           <div class="field">

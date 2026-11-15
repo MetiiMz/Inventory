@@ -212,6 +212,7 @@
     <div class="modal-body">
       <form id="sale-form">
         <input type="hidden" name="payment_type" value="cash">
+        <input type="hidden" name="credit_provider">
         <div class="prod-cell mb-14" id="sale-prod-cell"></div>
         <div class="form-grid" style="grid-template-columns:1fr">
           <div class="field">
@@ -244,8 +245,9 @@
               </div>
               <div class="field" style="margin-top:8px">
                 <label>کد رهگیری پرداخت</label>
-                <input class="input" name="credit_tracking_code" inputmode="numeric" placeholder="مثلاً 4546851">
-                <span class="hint">کد رهگیری ۶ رقمی پرداخت</span>
+                <input class="input" name="credit_tracking_code" inputmode="text" dir="ltr" placeholder="مثلاً 4546851" maxlength="56">
+                <span class="hint">کد رهگیری را همان‌طور که سرویس داده وارد کنید؛ پیشوند سرویس خودکار اضافه می‌شود</span>
+                <span class="code-preview" style="display:none;margin-top:4px;font-size:11.5px;color:var(--text-3)"><b>کد ثبت‌شده:</b> <span class="preview-code" dir="ltr"></span></span>
               </div>
             </div>
           </div>

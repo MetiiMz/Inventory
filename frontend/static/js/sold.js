@@ -23,6 +23,7 @@ function currentQuery() {
   if (q) p.set("q", q);
   if ($("#filter-sale-type").value) p.set("sale_type", $("#filter-sale-type").value);
   if ($("#filter-payment").value) p.set("pay_method", $("#filter-payment").value);
+  if ($("#filter-credit-service").value) p.set("credit_provider", $("#filter-credit-service").value);
   const from = toEnDigits($("#filter-date-from").value.trim());
   const to = toEnDigits($("#filter-date-to").value.trim());
   if (from) p.set("date_from", from);
@@ -173,6 +174,29 @@ $("#btn-confirm-bulk-delete").addEventListener("click", async () => {
   }
 });
 
+
+  function updateCreditPreview(formId) {
+    const form = $(`#${formId}`);
+    if (!form) return;
+    const providerInput = form.querySelector("[name='credit_provider']");
+    const codeInput = form.querySelector("[name='credit_tracking_code']");
+    const preview = form.querySelector(".code-preview");
+    const previewCode = form.querySelector(".preview-code");
+    if (!providerInput || !codeInput || !preview) return;
+    const provider = providerInput.value;
+    const raw = codeInput.value.trim();
+    if (!provider || !raw) {
+      preview.style.display = "none";
+      return;
+    }
+    const prefix = { digipay: "D", snappay: "S", torob: "T" }[provider] || "";
+    let code = raw.toUpperCase();
+    if (code.startsWith(prefix + "-")) code = code.slice(prefix.length + 1);
+    const full = prefix ? `${prefix}-${code}` : code;
+    previewCode.textContent = full;
+    preview.style.display = "";
+  }
+
 /* ------------------------------------------------ جزئیات فروش */
 
 function showSaleDetail(s) {
@@ -200,14 +224,18 @@ function showSaleDetail(s) {
   add("برند", esc(s.brand));
   add("تأمین‌کننده", esc(s.supplier));
   add("نوع فروش", s.sale_type_fa);
-  add("روش پرداخت", `<span class="badge ${pColor} plain">${pLabel}</span>`);
-  if (s.paid_breakdown_fa) add("ریز پرداخت", s.paid_breakdown_fa);
-  if (s.payment_type === "deposit") {
+  add("نوع پرداخت", `<span class="badge ${pColor} plain">${pLabel}</span>`);
+  if (s.payment_type === "credit") {
+    add("سرویس", esc(s.credit_provider_fa));
+    add("کد رهگیری", `<span class="code-pill" dir="ltr">${esc(s.credit_tracking_code)}</span>`);
+  } else if (s.payment_type === "deposit") {
     add("پرداخت‌شده تاکنون", `${s.deposit_paid_amount_display} تومان`);
     if (s.deposit_remaining > 0) add("مانده", `${s.deposit_remaining_display} تومان`);
     add("وضعیت تسویه", s.is_settled
       ? `<span class="badge green plain">تسویه شده${s.settled_at_fa ? " — " + s.settled_at_fa : ""}</span>`
       : '<span class="badge amber plain">در انتظار تسویه</span>');
+  } else {
+    if (s.paid_breakdown_fa) add("ریز پرداخت", s.paid_breakdown_fa);
   }
   add("خریدار", esc(s.customer));
   add("شماره تماس خریدار", s.customer_phone_fa);
@@ -244,12 +272,29 @@ function openEditModal(s) {
   const creditField = $("#edit-credit-fields");
   if (s.payment_type === "credit") {
     creditField.classList.remove("hidden");
-    const provider = s.credit_provider || "D";
+    const provider = s.credit_provider || "";
     $$("#edit-credit-provider-chips .chip").forEach((c) =>
       c.classList.toggle("active", c.dataset.provider === provider));
     $("#edit-credit-fields [name='credit_tracking_code']").value = s.credit_tracking_code_raw || s.credit_tracking_code || "";
   } else {
     creditField.classList.add("hidden");
+  }
+  // Disable cross-switching between deposit and credit
+  const editDepositChip = $('#edit-payment-chips [data-pay="deposit"]');
+  const editCreditChip = $('#edit-payment-chips [data-pay="credit"]');
+  if (s.payment_type === "credit") {
+    editDepositChip.disabled = true;
+    editDepositChip.title = "تغییر مستقیم بین بیعانه و اعتباری ممکن نیست";
+  } else {
+    editDepositChip.disabled = false;
+    editDepositChip.title = "";
+  }
+  if (s.payment_type === "deposit") {
+    editCreditChip.disabled = true;
+    editCreditChip.title = "تغییر مستقیم بین بیعانه و اعتباری ممکن نیست";
+  } else {
+    editCreditChip.disabled = false;
+    editCreditChip.title = "";
   }
   updateSaleEditHints();
   openModal("modal-sale-edit");
@@ -266,6 +311,14 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
   } else {
     paidField.classList.add("hidden");
   }
+  // reset credit chips when switching away from credit
+  if (chip.dataset.pay !== "credit") {
+    $$("#edit-credit-provider-chips .chip").forEach((c) => c.classList.remove("active"));
+    $("#edit-credit-provider-chips").removeAttribute("role");
+    $("#sale-edit-form [name='credit_provider']").value = "";
+    const ep = $("#sale-edit-form .code-preview");
+    if (ep) ep.style.display = "none";
+  }
   const creditField = $("#edit-credit-fields");
   if (chip.dataset.pay === "credit") {
     creditField.classList.remove("hidden");
@@ -273,6 +326,25 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
     creditField.classList.add("hidden");
   }
   updateSaleEditHints();
+
+  /* credit provider chips (edit form) */
+  $("#edit-credit-provider-chips").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    $$("#edit-credit-provider-chips .chip").forEach((c) => {
+      const active = c === chip;
+      c.classList.toggle("active", active);
+      c.setAttribute("role", "radio");
+      c.setAttribute("aria-checked", String(active));
+    });
+    $("#edit-credit-provider-chips").setAttribute("role", "radiogroup");
+    $("#sale-edit-form [name='credit_provider']").value = chip.dataset.provider;
+    updateCreditPreview("sale-edit-form");
+  });
+
+  $("#sale-edit-form [name='credit_tracking_code']").addEventListener("input", (e) => {
+    updateCreditPreview("sale-edit-form");
+  });
 });
 
 /* A4: warn when a cash sale would be saved with a partial breakdown */
@@ -315,8 +387,12 @@ $("#btn-save-edit").addEventListener("click", async () => {
     payload.deposit_amount = payload.paid_amount;
     delete payload.paid_amount;
   } else if (type === "credit") {
-    payload.credit_provider = form.querySelector('#edit-credit-provider-chips .chip.active')?.dataset.provider || "D";
-    payload.credit_tracking_code = form.querySelector('[name="credit_tracking_code"]').value.trim();
+    const cp = form.querySelector("[name='credit_provider']").value;
+    const ct = form.querySelector("[name='credit_tracking_code']").value.trim();
+    if (!cp) { toast("سرویس اعتباری را انتخاب کنید", "error"); btn.disabled = false; return; }
+    if (!ct) { toast("کد رهگیری پرداخت را وارد کنید", "error"); btn.disabled = false; return; }
+    payload.credit_provider = cp;
+    payload.credit_tracking_code = ct;
     delete payload.paid_amount;
   } else {
     delete payload.paid_amount;
@@ -385,7 +461,7 @@ $("#search").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(loadSales, 200);
 });
-["#filter-sale-type", "#filter-payment", "#sort-by", "#sort-dir"].forEach((sel) => {
+["#filter-sale-type", "#filter-payment", "#filter-credit-service", "#sort-by", "#sort-dir"].forEach((sel) => {
   $(sel).addEventListener("change", loadSales);
 });
 ["#filter-date-from", "#filter-date-to"].forEach((sel) => {
@@ -399,6 +475,7 @@ $("#btn-clear-filters").addEventListener("click", () => {
   $("#search").value = "";
   $("#filter-sale-type").value = "";
   $("#filter-payment").value = "";
+  $("#filter-credit-service").value = "";
   $("#filter-date-from").value = "";
   $("#filter-date-to").value = "";
   $("#sort-by").value = "date";
