@@ -359,24 +359,33 @@ $("#sale-edit-form [name='credit_tracking_code']").addEventListener("input", (e)
 /* A4: warn when a cash sale would be saved with a partial breakdown */
 function updateSaleEditHints() {
   const form = $("#sale-edit-form");
-  const hint = $("#sale-edit-paid-hint");
-  if (!hint) return;
+  const paidHint = $("#sale-edit-paid-hint");
+  const creditHint = $("#sale-edit-credit-hint");
+  if (!paidHint || !creditHint) return;
   const type = form.querySelector('[name="payment_type"]').value;
   const num = (v) => +toEnDigits(v || "").replace(/[^\d]/g, "") || 0;
   const total = num(form.querySelector('[name="sale_price"]').value);
   const paid = num(form.querySelector('[name="paid_amount"]').value);
-  if (type === "cash" && paid > 0 && paid < total - 0.001) {
-    hint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
-    hint.style.color = "var(--red)";
-  } else if (type === "credit") {
-    hint.textContent = "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید.";
-    hint.style.color = "";
-  } else if (paid > 0) {
-    hint.textContent = `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
-    hint.style.color = "";
+  // #sale-edit-paid-hint lives inside #edit-paid-amount-field, which is hidden
+  // for credit sales, so the credit hint goes to the visible credit block.
+  if (type === "credit") {
+    creditHint.textContent = "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید.";
+    creditHint.style.color = "";
+    paidHint.textContent = "";
+    paidHint.style.color = "";
   } else {
-    hint.textContent = "";
-    hint.style.color = "";
+    creditHint.textContent = "";
+    creditHint.style.color = "";
+    if (type === "cash" && paid > 0 && paid < total - 0.001) {
+      paidHint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
+      paidHint.style.color = "var(--red)";
+    } else if (paid > 0) {
+      paidHint.textContent = `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
+      paidHint.style.color = "";
+    } else {
+      paidHint.textContent = "";
+      paidHint.style.color = "";
+    }
   }
 }
 
