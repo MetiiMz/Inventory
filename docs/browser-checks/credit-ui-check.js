@@ -161,7 +161,7 @@ test.describe("credit sale UI", () => {
     await page.click('#sale-payment-chips [data-pay="credit"]');
     await page.waitForSelector("#credit-fields:not(.hidden)");
     const hint = await page.locator("#pay-basis-hint").textContent();
-    expect(hint).toBe("فروش اعتباری — پرداخت در آینده تسویه می‌شود");
+    expect(hint).toBe("مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید.");
     const creditHint = await page.locator("#paid-breakdown-hint").textContent();
     expect(creditHint).toBe(
       "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید."

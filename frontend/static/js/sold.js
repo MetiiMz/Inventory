@@ -86,6 +86,13 @@ function render() {
       <td class="muted" dir="ltr" style="text-align:right">${s.customer_phone_fa || '—'}</td>
       <td class="num" style="color:var(--green);font-weight:600">${s.sale_price_display}</td>
       <td class="muted">${s.sale_date_fa}</td>
+      <td class="pay-cell">
+        ${s.payment_type === "credit"
+          ? `<span class="badge blue plain">اعتباری</span> <span class="pay-svc">${esc(s.credit_provider_fa || "")}</span>${s.credit_tracking_code ? `<span class="code-pill" style="font-size:11px;margin-left:4px">${esc(s.credit_tracking_code)}</span>` : ""}`
+          : s.payment_type === "deposit"
+            ? `<span class="badge amber plain">بیعانه</span>`
+            : `<span class="badge green plain">تسویه کامل</span>`}
+      </td>
       <td>
         <div class="row-actions">
           <button class="btn btn-icon btn-sm" data-act="edit" title="ویرایش">
@@ -273,11 +280,13 @@ function openEditModal(s) {
   if (s.payment_type === "credit") {
     creditField.classList.remove("hidden");
     const provider = s.credit_provider || "";
+    form.querySelector("[name='credit_provider']").value = provider;
     $$("#edit-credit-provider-chips .chip").forEach((c) =>
       c.classList.toggle("active", c.dataset.provider === provider));
     $("#edit-credit-fields [name='credit_tracking_code']").value = s.credit_tracking_code_raw || s.credit_tracking_code || "";
   } else {
     creditField.classList.add("hidden");
+    form.querySelector("[name='credit_provider']").value = "";
   }
   // Disable cross-switching between deposit and credit
   const editDepositChip = $('#edit-payment-chips [data-pay="deposit"]');
@@ -326,25 +335,25 @@ $("#edit-payment-chips").addEventListener("click", (e) => {
     creditField.classList.add("hidden");
   }
   updateSaleEditHints();
+});
 
-  /* credit provider chips (edit form) */
-  $("#edit-credit-provider-chips").addEventListener("click", (e) => {
-    const chip = e.target.closest(".chip");
-    if (!chip) return;
-    $$("#edit-credit-provider-chips .chip").forEach((c) => {
-      const active = c === chip;
-      c.classList.toggle("active", active);
-      c.setAttribute("role", "radio");
-      c.setAttribute("aria-checked", String(active));
-    });
-    $("#edit-credit-provider-chips").setAttribute("role", "radiogroup");
-    $("#sale-edit-form [name='credit_provider']").value = chip.dataset.provider;
-    updateCreditPreview("sale-edit-form");
+/* credit provider chips (edit form) — registered once, not inside the payment-chip listener */
+$("#edit-credit-provider-chips").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  $$("#edit-credit-provider-chips .chip").forEach((c) => {
+    const active = c === chip;
+    c.classList.toggle("active", active);
+    c.setAttribute("role", "radio");
+    c.setAttribute("aria-checked", String(active));
   });
+  $("#edit-credit-provider-chips").setAttribute("role", "radiogroup");
+  $("#sale-edit-form [name='credit_provider']").value = chip.dataset.provider;
+  updateCreditPreview("sale-edit-form");
+});
 
-  $("#sale-edit-form [name='credit_tracking_code']").addEventListener("input", (e) => {
-    updateCreditPreview("sale-edit-form");
-  });
+$("#sale-edit-form [name='credit_tracking_code']").addEventListener("input", (e) => {
+  updateCreditPreview("sale-edit-form");
 });
 
 /* A4: warn when a cash sale would be saved with a partial breakdown */
@@ -359,6 +368,9 @@ function updateSaleEditHints() {
   if (type === "cash" && paid > 0 && paid < total - 0.001) {
     hint.textContent = "برای فروش نقدی جمع پرداخت‌ها باید برابر قیمت فروش باشد؛ برای پرداخت ناقص «بیعانه» را انتخاب کنید";
     hint.style.color = "var(--red)";
+  } else if (type === "credit") {
+    hint.textContent = "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید.";
+    hint.style.color = "";
   } else if (paid > 0) {
     hint.textContent = `جمع پرداخت‌ها: ${faMoney(paid)} تومان${type === "deposit" ? ` — مانده: ${faMoney(Math.max(0, total - paid))} تومان` : ""}`;
     hint.style.color = "";
@@ -375,6 +387,7 @@ function updateSaleEditHints() {
 
 $("#btn-save-edit").addEventListener("click", async () => {
   const form = $("#sale-edit-form");
+  const btn = $("#btn-save-edit");
   if (!form.reportValidity()) return;
   const payload = {};
   new FormData(form).forEach((v, k) => { payload[k] = v; });
@@ -397,7 +410,6 @@ $("#btn-save-edit").addEventListener("click", async () => {
   } else {
     delete payload.paid_amount;
   }
-  const btn = $("#btn-save-edit");
   btn.disabled = true;
   try {
     await api(`/api/sales/${editingSaleId}`, { method: "PUT", body: payload });
