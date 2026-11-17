@@ -84,8 +84,6 @@
         <span><span class="lg-dot" style="background: var(--accent)"></span>فروش</span>
         <span><span class="lg-dot" style="background: var(--amber)"></span>خرید</span>
         <span><span class="lg-dot" style="background: var(--green)"></span>سود فروش</span>
-        <span><span style="display:inline-block;width:14px;border-top:2px dashed var(--text-3)"></span>تعداد حضوری</span>
-        <span><span style="display:inline-block;width:14px;border-top:2px dashed var(--purple)"></span>تعداد آنلاین</span>
       </div>
     </div>
     <div class="chart-box" id="sales-chart" data-monthly='{{ monthly | tojson }}'></div>
@@ -95,6 +93,30 @@
       </button>
       <span class="pager-year" id="chart-year-label"></span>
       <button class="pager-btn" id="chart-next-year" type="button" aria-label="سال بعد" title="سال بعد">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+    </div>
+  </section>
+</div>
+
+<div class="mt-14">
+  <section class="glass card">
+    <div class="card-title">
+      <h3 id="channels-title">{% if channels %}تعداد فروش به تفکیک نوع — سال {{ fa_num(channels.0.jy) }}{% else %}تعداد فروش{% endif %}</h3>
+      <div class="chart-legend">
+        <span><span class="lg-dot" style="background: var(--text-3)"></span>حضوری</span>
+        <span><span class="lg-dot" style="background: var(--purple)"></span>آنلاین</span>
+        <span><span class="lg-dot" style="background: var(--amber)"></span>اعتباری</span>
+      </div>
+      <p class="chart-note">فروش اعتباری در نوع (حضوری/آنلاین) خودش هم شمرده می‌شود.</p>
+    </div>
+    <div class="chart-box" id="channels-chart" data-channels='{{ channels | tojson }}'></div>
+    <div class="chart-pager" dir="ltr">
+      <button class="pager-btn" id="channels-prev-year" type="button" aria-label="سال قبل" title="سال قبل">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+      </button>
+      <span class="pager-year" id="channels-year-label"></span>
+      <button class="pager-btn" id="channels-next-year" type="button" aria-label="سال بعد" title="سال بعد">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </button>
     </div>
@@ -273,226 +295,57 @@
     }
   })();
 
-  /* ---- نمودار خطی ۱۲ ماه هر سال (فروردین تا اسفند) + صفحه‌بندی سال ---- */
+<script src="{{ static_v('js/dashboard-charts.js') }}"></script>
+<script>
   (function () {
-    const box = document.getElementById("sales-chart");
-    if (!box) return;
-    const prevBtn = document.getElementById("chart-prev-year");
-    const nextBtn = document.getElementById("chart-next-year");
-    const yearLabel = document.getElementById("chart-year-label");
-    const titleEl = document.getElementById("chart-title");
+    initChart({
+      boxId: "sales-chart",
+      prevId: "chart-prev-year",
+      nextId: "chart-next-year",
+      labelId: "chart-year-label",
+      titleId: "chart-title",
+      dataAttr: "monthly",
+      endpoint: "/api/reports/monthly-activity",
+      title: (y) => `فعالیت ۱۲ ماه سال ${faNum(y)} — خرید، فروش و سود`,
+      emptyTitle: "فعالیتی در این سال ثبت نشده",
+      emptyBody: "با اولین خرید یا فروش، نمودار اینجا شکل می‌گیرد",
+      ariaLabel: (y) => `نمودار ماهانه خرید، فروش و سود سال ${faNum(y)}`,
+      series: [
+        { key: "purchase_value", colorVar: "--amber", width: 2.4, gid: "g-amber", areaOp: 0.10 },
+        { key: "revenue", colorVar: "--accent", width: 2.8, gid: "g-blue", areaOp: 0.16 },
+        { key: "profit", colorVar: "--green", width: 3.0, gid: "g-green", areaOp: 0.13 },
+      ],
+      tooltipRows: (m, i, f) => [
+        `<div class="bt-row"><span>فروش</span><b style="color:var(--accent)">${f.money(m.revenue)}</b></div>`,
+        `<div class="bt-row"><span>خرید</span><b style="color:var(--amber)">${f.money(m.purchase_value)}</b></div>`,
+        `<div class="bt-row"><span>سود فروش</span><b style="color:var(--green)">${f.money(m.profit)}</b></div>`,
+        m.count ? `<div class="bt-row"><span>تعداد فروش</span><b>${f.num(m.count)}</b></div>` : "",
+      ],
+    });
 
-    let monthly = [];
-    try { monthly = JSON.parse(box.dataset.monthly || "[]"); } catch { monthly = []; }
-    let curYear = monthly.length ? monthly[0].jy : null;
-    let loading = false;
-
-    /* سال جلالی جاری — فلش «سال بعد» فقط تا این سال فعال است */
-    let currentJy = curYear;
-    try {
-      if (window.JalaliJS) {
-        const now = new Date();
-        currentJy = JalaliJS.g2j(now.getFullYear(), now.getMonth() + 1, now.getDate()).jy;
-      }
-    } catch (e) { /* JalaliJS در دسترس نیست */ }
-
-    const updatePager = () => {
-      if (yearLabel) yearLabel.textContent = curYear != null ? faNum(curYear) : "";
-      if (titleEl) titleEl.textContent = curYear != null
-        ? `فعالیت ۱۲ ماه سال ${faNum(curYear)} — خرید، فروش و سود`
-        : "فعالیت ماهانه";
-      if (prevBtn) prevBtn.disabled = loading || curYear == null;
-      if (nextBtn) nextBtn.disabled = loading || curYear == null || curYear >= currentJy;
-    };
-
-    async function loadYear(jy) {
-      if (loading || jy == null) return;
-      loading = true;
-      updatePager();
-      box.classList.add("chart-loading");
-      try {
-        const resp = await fetch(`/api/reports/monthly-activity?year=${jy}`);
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || "خطا در دریافت داده");
-        monthly = data.months || [];
-        curYear = data.year;
-        renderChart();
-      } catch (err) {
-        console.warn("monthly-activity:", err);
-      }
-      box.classList.remove("chart-loading");
-      loading = false;
-      updatePager();
-    }
-
-    if (prevBtn) prevBtn.addEventListener("click", () => loadYear(curYear - 1));
-    if (nextBtn) nextBtn.addEventListener("click", () => loadYear(curYear + 1));
-
-    function renderChart() {
-      if (!monthly.length) {
-        box.innerHTML = '<div class="empty" style="padding:34px 16px"><div class="e-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 17.5 9.5 12l3.5 3.5L20 8.5"/></svg></div><h4>فعالیتی در این سال ثبت نشده</h4><p>با اولین خرید یا فروش، نمودار اینجا شکل می‌گیرد</p></div>';
-        return;
-      }
-
-      /* بوم بزرگ‌تر — نمودار تمام‌عرض است */
-      const W = 1200, H = 340, PAD_R = 18, PAD_L = 18, PAD_T = 26, PAD_B = 34;
-      const plotW = W - PAD_R - PAD_L, plotH = H - PAD_T - PAD_B;
-      const n = monthly.length;
-      const actual = monthly.filter(m => !m.future); /* فقط تا ماه جاری */
-      const curIdx = Math.max(actual.length - 1, 0);
-      const stepX = plotW / (n - 1 || 1);
-      const maxVal = Math.max(
-        ...actual.map(m => Math.max(m.revenue || 0, m.purchase_value || 0, m.profit || 0)), 1);
-      const mag = Math.pow(10, Math.floor(Math.log10(maxVal)));
-      const top = Math.ceil(maxVal / mag) * mag;
-
-      const styles = getComputedStyle(document.documentElement);
-      const cBlue = styles.getPropertyValue("--accent").trim() || "#0071e3";
-      const cAmber = styles.getPropertyValue("--amber").trim() || "#c77800";
-      const cGreen = styles.getPropertyValue("--green").trim() || "#1fa64a";
-      const cMuted = styles.getPropertyValue("--text-3").trim() || "#8a8d98";
-      const cPurple = styles.getPropertyValue("--purple").trim() || "#9d3fd0";
-      const cRing = styles.getPropertyValue("--surface-strong").trim() || "#ffffff";
-
-      const xAt = (i) => PAD_L + stepX * i;
-      const yAt = (v) => H - PAD_B - (top ? (v / top) * plotH : 0);
-
-      /* مقیاس مستقل تعداد — نوار پایینی نمودار (Spec-002) */
-      const countTop = Math.max(
-        ...actual.map(m => Math.max(m.person_count || 0, m.online_count || 0)), 1);
-      const bandH = plotH * 0.18;
-      const yCountAt = (v) => H - PAD_B - (v / countTop) * bandH;
-
-      /* منحنی نرم: تبدیل Catmull-Rom به Bézier مکعبی — بدون شکستگی تیز */
-      const smoothPath = (pts) => {
-        if (!pts.length) return "";
-        if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
-        let d = `M${pts[0].x},${pts[0].y}`;
-        for (let i = 0; i < pts.length - 1; i++) {
-          const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-          const c1x = p1.x + (p2.x - p0.x) / 6, c1y = p1.y + (p2.y - p0.y) / 6;
-          const c2x = p2.x - (p3.x - p1.x) / 6, c2y = p2.y - (p3.y - p1.y) / 6;
-          d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
-        }
-        return d;
-      };
-
-      const ptsOf = (key) => actual.map((m, i) => ({ x: xAt(i), y: yAt(m[key] || 0) }));
-      const linePath = (key) => smoothPath(ptsOf(key));
-      const areaPath = (key) => {
-        const pts = ptsOf(key);
-        if (!pts.length) return "";
-        return smoothPath(pts) +
-          ` L${pts[pts.length - 1].x.toFixed(2)},${H - PAD_B} L${pts[0].x.toFixed(2)},${H - PAD_B} Z`;
-      };
-
-      /* سه خط: خرید (کهربایی) → فروش (آبی) → سود (سبز، رو)، از پشت به جلو رسم می‌شوند */
-      const series = [
-        { key: "purchase_value", color: cAmber, width: 2.4, gid: "g-amber", areaOp: 0.10 },
-        { key: "revenue",        color: cBlue,  width: 2.8, gid: "g-blue",  areaOp: 0.16 },
-        { key: "profit",         color: cGreen, width: 3.0, gid: "g-green", areaOp: 0.13 },
-      ];
-
-      /* دو خط تعداد: حضوری و آنلاین — خط‌چین روی مقیاس پایینی */
-      const countSeries = [
-        { key: "person_count", color: cMuted },
-        { key: "online_count", color: cPurple },
-      ];
-      const countPath = (key) =>
-        smoothPath(actual.map((m, i) => ({ x: xAt(i), y: yCountAt(m[key] || 0) })));
-
-      /* گرادیان محو زیر هر خط */
-      const defs = `<defs>${series.map(s => `
-        <linearGradient id="${s.gid}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="${s.color}" stop-opacity="${s.areaOp}"/>
-          <stop offset="1" stop-color="${s.color}" stop-opacity="0"/>
-        </linearGradient>`).join("")}
-      </defs>`;
-
-      let points = "", labels = "", hits = "";
-      monthly.forEach((m, i) => {
-        const x = xAt(i);
-        if (i <= curIdx) {
-          series.forEach(s => {
-            points += `<circle cx="${x}" cy="${yAt(m[s.key] || 0)}" r="3.2" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
-          });
-          countSeries.forEach(s => {
-            points += `<circle cx="${x}" cy="${yCountAt(m[s.key] || 0)}" r="2.4" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
-          });
-        }
-        const isCur = i === curIdx;
-        labels += `<text x="${x}" y="${H - 9}" text-anchor="middle" font-size="11" font-weight="${isCur ? 800 : 600}" fill="${isCur ? cBlue : cMuted}" opacity="${m.future ? 0.45 : 1}">${m.label}</text>`;
-        if (!m.future) {
-          hits += `<rect class="hit" data-i="${i}" x="${x - stepX / 2}" y="0" width="${stepX}" height="${H}" fill="transparent"/>`;
-        }
-      });
-
-      /* نقطه‌ی پایانی (ماه جاری) برجسته‌تر */
-      const lastX = xAt(curIdx);
-      series.forEach(s => {
-        points += `<circle cx="${lastX}" cy="${yAt(actual[curIdx][s.key] || 0)}" r="4.8" fill="${s.color}" stroke="${cRing}" stroke-width="1.6"/>`;
-      });
-      countSeries.forEach(s => {
-        points += `<circle cx="${lastX}" cy="${yCountAt(actual[curIdx][s.key] || 0)}" r="3.6" fill="${s.color}" stroke="${cRing}" stroke-width="1.4"/>`;
-      });
-
-      const gridLines = [0.25, 0.5, 0.75, 1].map(f => {
-        const y = H - PAD_B - plotH * f;
-        return `<line x1="${PAD_L}" x2="${W - PAD_R}" y1="${y}" y2="${y}" stroke="currentColor" opacity="0.07" stroke-dasharray="3 5"/>`;
-      }).join("");
-      const baseline = `<line x1="${PAD_L}" x2="${W - PAD_R}" y1="${H - PAD_B}" y2="${H - PAD_B}" stroke="currentColor" opacity="0.16"/>`;
-
-      /* نشانگر عمودی ماه جاری — مرز داده‌ی واقعی و ماه‌های آینده */
-      const curLine = `<line x1="${lastX}" x2="${lastX}" y1="${PAD_T}" y2="${H - PAD_B}" stroke="${cBlue}" opacity="0.25" stroke-dasharray="4 5"/>`;
-      const hoverLine = `<line id="chart-cursor" x1="0" x2="0" y1="${PAD_T}" y2="${H - PAD_B}" stroke="currentColor" opacity="0.25" visibility="hidden"/>`;
-
-      box.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:${cMuted}" role="img" aria-label="نمودار ماهانه خرید، فروش و سود سال ${faNum(curYear)}">
-          ${defs}${gridLines}${baseline}
-          ${series.map(s => `<path d="${areaPath(s.key)}" fill="url(#${s.gid})"/>`).join("")}
-          ${series.map(s => `<path d="${linePath(s.key)}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}
-          ${countSeries.map(s => `<path d="${countPath(s.key)}" fill="none" stroke="${s.color}" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" opacity="0.9"/>`).join("")}
-          ${curLine}${hoverLine}${points}${labels}${hits}
-        </svg>
-        <div class="bar-tooltip"></div>`;
-
-      const tooltip = box.querySelector(".bar-tooltip");
-      const svg = box.querySelector("svg");
-      const cursor = svg.querySelector("#chart-cursor");
-      svg.addEventListener("mousemove", (e) => {
-        const hit = e.target.closest(".hit");
-        if (!hit) { tooltip.classList.remove("show"); cursor.setAttribute("visibility", "hidden"); return; }
-        const i = +hit.dataset.i;
-        const m = monthly[i];
-        cursor.setAttribute("x1", xAt(i));
-        cursor.setAttribute("x2", xAt(i));
-        cursor.setAttribute("visibility", "visible");
-        const rows = [
-          `<div class="bt-title">${m.label} ${faNum(m.jy)}</div>`,
-          `<div class="bt-row"><span>فروش</span><b style="color:var(--accent)">${faMoney(m.revenue)}</b></div>`,
-          `<div class="bt-row"><span>خرید</span><b style="color:var(--amber)">${faMoney(m.purchase_value)}</b></div>`,
-          `<div class="bt-row"><span>سود فروش</span><b style="color:var(--green)">${faMoney(m.profit)}</b></div>`,
-          m.count ? `<div class="bt-row"><span>تعداد فروش</span><b>${faNum(m.count)}</b></div>` : "",
-          m.person_count ? `<div class="bt-row"><span>فروش حضوری</span><b style="color:${cMuted}">${faNum(m.person_count)}</b></div>` : "",
-          m.online_count ? `<div class="bt-row"><span>فروش آنلاین</span><b style="color:${cPurple}">${faNum(m.online_count)}</b></div>` : "",
-        ];
-        tooltip.innerHTML = rows.join("");
-        const rect = box.getBoundingClientRect();
-        let x = e.clientX - rect.left;
-        x = Math.max(90, Math.min(rect.width - 90, x));
-        const y = e.clientY - rect.top;
-        tooltip.style.left = x + "px";
-        tooltip.style.top = Math.max(80, y) + "px";
-        tooltip.classList.add("show");
-      });
-      svg.addEventListener("mouseleave", () => {
-        tooltip.classList.remove("show");
-        cursor.setAttribute("visibility", "hidden");
-      });
-    }
-
-    renderChart();
-    updatePager();
+    initChart({
+      boxId: "channels-chart",
+      prevId: "channels-prev-year",
+      nextId: "channels-next-year",
+      labelId: "channels-year-label",
+      titleId: "channels-title",
+      dataAttr: "channels",
+      endpoint: "/api/reports/sales-channels",
+      title: (y) => `تعداد فروش به تفکیک نوع — سال ${faNum(y)}`,
+      emptyTitle: "فروش در این سال ثبت نشده",
+      emptyBody: "با اولین فروش، نمودار اینجا شکل می‌گیرد",
+      ariaLabel: (y) => `تعداد فروش به تفکیک نوع سال ${faNum(y)}`,
+      series: [
+        { key: "person_count", colorVar: "--text-3", width: 2.4 },
+        { key: "online_count", colorVar: "--purple", width: 2.4 },
+        { key: "credit_count", colorVar: "--amber", width: 2.4 },
+      ],
+      tooltipRows: (m, i, f) => [
+        m.person_count ? `<div class="bt-row"><span>حضوری</span><b style="color:var(--text-3)">${f.num(m.person_count)}</b></div>` : "",
+        m.online_count ? `<div class="bt-row"><span>آنلاین</span><b style="color:var(--purple)">${f.num(m.online_count)}</b></div>` : "",
+        m.credit_count ? `<div class="bt-row"><span>اعتباری</span><b style="color:var(--amber)">${f.num(m.credit_count)}</b></div>` : "",
+      ],
+    });
   })();
 </script>
 {% endblock %}

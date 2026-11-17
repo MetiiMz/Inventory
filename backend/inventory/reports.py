@@ -127,6 +127,75 @@ def get_monthly_activity(jy=None):
     return out
 
 
+def get_sales_channels(jy=None):
+    """۱۲ ماه یک سال جلالی — تعداد فروش به تفکیک قنوات (حضوری / آنلاین / اعتباری).
+
+    همان دایره‌ی ماهانه و منطق « آینده »ِ get_monthly_activity: ماه‌های بعد از
+    ماه جاریِ همان سال با future=True و مقادیر صفر برمی‌گردند.
+
+    یک‌باره روی ردیف‌های Sale می‌خواند و فقط از سه ستون sale_date / sale_type /
+    payment_type استفاده می‌کند. فروش اعتباری (payment_type == "credit") در هر دو
+    نوع (حضوری/آنلاین) خودش هم شمرده می‌شود؛ نوع sale_type ناشناس در هیچ کدام
+    از دو گنجانده نمی‌شود.
+
+    هر ماه: {jy, jm, label, person_count, online_count, credit_count, future}
+    """
+    today = datetime.date.today()
+    jy_now, jm_now, _ = gregorian_to_jalali(today.year, today.month, today.day)
+    if jy is None:
+        jy = jy_now
+
+    months_list = [(jy, jm) for jm in range(1, 13)]
+
+    ranges = []
+    for jy_, jm in months_list:
+        gy1, gm1, gd1 = jalali_to_gregorian(jy_, jm, 1)
+        last = jalali_month_length(jy_, jm)
+        gy2, gm2, gd2 = jalali_to_gregorian(jy_, jm, last)
+        ranges.append(
+            (
+                (jy_, jm),
+                datetime.date(gy1, gm1, gd1).isoformat(),
+                datetime.date(gy2, gm2, gd2).isoformat(),
+            )
+        )
+
+    # سرعت: کل بازه را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
+    sales_rows = Sale.objects.values_list("sale_date", "sale_type", "payment_type")
+
+    def month_of(iso):
+        # ISO میلادی → (jy, jm)
+        y, m, d = (int(x) for x in iso[:10].split("-"))
+        return gregorian_to_jalali(y, m, d)[:2]
+
+    counts_by_month = {}
+    for sdate, sale_type, payment_type in sales_rows:
+        if not sdate:
+            continue
+        key = month_of(sdate)
+        agg = counts_by_month.setdefault(key, [0, 0, 0])
+        if sale_type == "person":
+            agg[0] += 1
+        elif sale_type == "online":
+            agg[1] += 1
+        if payment_type == "credit":
+            agg[2] += 1
+
+    out = []
+    for (jy_, jm), start, end in ranges:
+        c = counts_by_month.get((jy_, jm), [0, 0, 0])
+        future = (jy_ > jy_now) or (jy_ == jy_now and jm > jm_now)
+        out.append({
+            "jy": jy_, "jm": jm,
+            "label": MONTH_NAMES[jm - 1],
+            "person_count": 0 if future else c[0],
+            "online_count": 0 if future else c[1],
+            "credit_count": 0 if future else c[2],
+            "future": future,
+        })
+    return out
+
+
 def get_brand_breakdown():
     """موجودی انبار و فروش‌های ثبت‌شده به تفکیک برند.
 

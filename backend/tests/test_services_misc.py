@@ -340,3 +340,45 @@ class ImportLegacyPurchaseTypeColumnTests(TestCase):
         self.assertNotIn("نوع خرید", text)
         header = text.splitlines()[0]
         self.assertNotIn("نوع", header.split(","))
+
+
+class SalesChannelsServiceTests(TestCase):
+    """servis sales_channels — اعتبارسنجی و tally فروش‌ها."""
+
+    def test_sales_channels_validation(self):
+        year, months = services.sales_channels("1404")
+        self.assertEqual(year, 1404)
+        self.assertEqual(len(months), 12)
+        year, months = services.sales_channels(None)
+        self.assertEqual(len(months), 12)
+        _, err = call(services.sales_channels, "not-a-year")
+        self.assertIn("نامعتبر", err.message)
+        _, err = call(services.sales_channels, "99999")
+        self.assertIn("بازه", err.message)
+
+    def test_sales_channels_credit_counted_in_both(self):
+        # فروش آنلاین+اعتباری: هر دو شمارش آنلاین و اعتباری افزایش می‌یابد
+        p = make_product(purchase_date="2026-09-01")  # ۱۹ شهریور ۱۴۰۵
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2026-09-10", customer="x", customer_phone="09123456789",
+            sale_type="online", paid_cash=0, paid_pos=100, payment_type="credit",
+            credit_provider="توراب")
+        _, months = services.sales_channels("1405")
+        hit = next(m for m in months if m["online_count"] or m["credit_count"])
+        self.assertEqual(hit["person_count"], 0)
+        self.assertEqual(hit["online_count"], 1)
+        self.assertEqual(hit["credit_count"], 1)
+        self.assertFalse(hit["future"])
+
+    def test_sales_channels_person_only(self):
+        p = make_product(purchase_date="2026-09-01")
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2026-09-10", customer="x", customer_phone="09123456788",
+            sale_type="person", paid_cash=100, payment_type="cash")
+        _, months = services.sales_channels("1405")
+        hit = next(m for m in months if m["person_count"])
+        self.assertEqual(hit["person_count"], 1)
+        self.assertEqual(hit["online_count"], 0)
+        self.assertEqual(hit["credit_count"], 0)

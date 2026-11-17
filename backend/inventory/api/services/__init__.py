@@ -50,7 +50,7 @@ from .settings import (
 )
 from .uploads import _save_uploaded, save_upload, cleanup_orphan_images
 from .calendar import _repair_cell, calendar_month, calendar_day
-from .reports import monthly_activity
+from .reports import monthly_activity, sales_channels
 from .export_import import (
     _export_funcs, export_data_file, import_products_file, import_template_file,
 )
@@ -65,5 +65,5 @@ __all__ = [
     'delete_tracking', 'bulk_delete_tracking', 'brands_list', 'brands_add', 'brands_delete',
     'suppliers_list', 'suppliers_add', 'suppliers_delete', 'site_settings',
     'save_settings', 'set_site_icon', '_save_uploaded', 'save_upload', 'cleanup_orphan_images', '_repair_cell', 'calendar_month',
-    'calendar_day', 'monthly_activity', '_export_funcs', 'export_data_file', 'import_products_file', 'import_template_file',
+    'calendar_day', 'monthly_activity', 'sales_channels', '_export_funcs', 'export_data_file', 'import_products_file', 'import_template_file',
 ]

@@ -14,6 +14,7 @@ from inventory.dbhelpers import get_setting
 from inventory.models import Payment, Product, Repair, Sale, Tracking
 from inventory.reports import (
     get_brand_breakdown, get_dashboard_stats, get_monthly_activity,
+    get_sales_channels,
 )
 from inventory.utils import product_dict, sale_dict
 
@@ -60,7 +61,7 @@ def dashboard(request):
     )
     ctx = page_ctx(request, "dashboard")
     ctx.update(
-        stats=stats, monthly=monthly, brands=brands,
+        stats=stats, monthly=monthly, channels=get_sales_channels(), brands=brands,
         recent_sales=[sale_dict(s) for s in sales_rows],
         recent_purchases=[product_dict(p) for p in purchase_rows],
     )

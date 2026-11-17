@@ -454,6 +454,36 @@ class LegacyApiBaselineTests(TestCase):
         self.assertLegacyError(
             self.client.get("/api/reports/monthly-activity", {"year": "1200"}), 400)
 
+    def test_sales_channels_report(self):
+        jy, _, _ = today_jalali()
+        r = self.client.get("/api/reports/sales-channels", {"year": str(jy)})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["ok"])
+        self.assertNamedKeys(body, ("year", "months"))
+        self.assertEqual(body["year"], jy)
+        self.assertEqual(len(body["months"]), 12)
+
+        default = self.client.get("/api/reports/sales-channels")
+        self.assertTrue(default.json()["ok"])
+        self.assertNamedKeys(default.json(), ("year", "months"))
+
+        self.assertLegacyError(
+            self.client.get("/api/reports/sales-channels", {"year": "abc"}), 400)
+        self.assertLegacyError(
+            self.client.get("/api/reports/sales-channels", {"year": "1200"}), 400)
+
+    def test_dashboard_renders_both_chart_cards(self):
+        r = self.client.get("/dashboard")
+        self.assertEqual(r.status_code, 200)
+        html = r.content.decode("utf-8")
+        for id_ in ("sales-chart", "chart-prev-year", "chart-year-label",
+                    "chart-next-year", "chart-title",
+                    "channels-chart", "channels-prev-year",
+                    "channels-year-label", "channels-next-year",
+                    "channels-title"):
+            self.assertIn(id_, html, id_)
+
     # ======================================== T008: export, import, backups
     def test_export_files_and_import_template(self):
         with tempfile.TemporaryDirectory() as tmp:

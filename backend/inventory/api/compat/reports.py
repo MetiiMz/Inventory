@@ -13,3 +13,11 @@ def api_monthly_activity(request):
         return _ok(year=year, months=months)
     return _guard(run)
 
+
+def api_sales_channels(request):
+    """GET /api/reports/sales-channels?year=<jy> — sales counts per channel."""
+    def run():
+        year, months = services.sales_channels(request.GET.get("year"))
+        return _ok(year=year, months=months)
+    return _guard(run)
+

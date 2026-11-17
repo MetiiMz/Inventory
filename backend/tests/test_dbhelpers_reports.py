@@ -7,6 +7,7 @@ attributes directly instead of ``override_settings`` — and they point
 them at a temp *file* DB, since the Django test database is in-memory
 and invisible to the raw sqlite3 connections those helpers use.
 """
+import datetime
 import importlib
 import os
 import tempfile
@@ -16,6 +17,7 @@ from django.apps import apps
 from django.test import TestCase
 
 from inventory import dbhelpers, reports
+from inventory.jalali import gregorian_to_jalali
 from inventory.models import Payment, Product, Sale, Setting
 from tests.helpers import make_product, today_iso
 
@@ -349,3 +351,69 @@ class ReportTests(TestCase):
         self.assertIsNone(row["sold_purchase_value"])
         self.assertIsNone(row["sold_value"])
         self.assertIsNone(row["sold_profit"])
+
+
+class SalesChannelReportTests(TestCase):
+    """get_sales_channels — تعداد فروش به تفکیک نوع (حضوری / آنلاین / اعتباری)."""
+
+    def _jalali_date(self, jy, jm, jd):
+        from inventory.jalali import jalali_to_gregorian
+        import datetime
+        gy, gm, gd = jalali_to_gregorian(jy, jm, jd)
+        return datetime.date(gy, gm, gd).isoformat()
+
+    def test_person_online_credit_counts(self):
+        p = make_product(purchase_date=self._jalali_date(1405, 7, 1))
+        # فروش حضوری در مهر ۱۴۰۵
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date=self._jalali_date(1405, 7, 1), customer="a",
+            customer_phone="09123456780", sale_type="person",
+            paid_cash=100, payment_type="cash")
+        # فروش آنلاین اعتباری (توراب) در همان ماه — در هر دو نوع شمرده می‌شود
+        Sale.objects.create(
+            product=p, sale_price=200, purchase_price=20, profit=180,
+            sale_date=self._jalali_date(1405, 7, 5), customer="b",
+            customer_phone="09123456781", sale_type="online",
+            paid_cash=0, paid_pos=200, payment_type="credit",
+            credit_provider="توراب")
+        months = reports.get_sales_channels(1405)
+        self.assertEqual(len(months), 12)
+        mhr = next(m for m in months if m["jm"] == 7)
+        self.assertEqual(mhr["person_count"], 1)
+        self.assertEqual(mhr["online_count"], 1)
+        self.assertEqual(mhr["credit_count"], 1)
+        self.assertFalse(mhr["future"])
+        for m in months:
+            if m["jm"] == 7:
+                continue
+            self.assertEqual(m["person_count"], 0)
+            self.assertEqual(m["online_count"], 0)
+            self.assertEqual(m["credit_count"], 0)
+
+    def test_unknown_sale_type_not_counted(self):
+        p = make_product(purchase_date=self._jalali_date(1405, 8, 1))
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date=self._jalali_date(1405, 8, 1), customer="c",
+            customer_phone="09123456782", sale_type="unknown",
+            paid_cash=100, payment_type="cash")
+        months = reports.get_sales_channels(1405)
+        mah = next(m for m in months if m["jm"] == 8)
+        self.assertEqual(mah["person_count"], 0)
+        self.assertEqual(mah["online_count"], 0)
+        self.assertEqual(mah["credit_count"], 0)
+
+    def test_future_months_are_zero(self):
+        months = reports.get_sales_channels(1500)
+        self.assertTrue(all(m["future"] for m in months))
+        self.assertTrue(
+            all(m["person_count"] == 0 and m["online_count"] == 0 and m["credit_count"] == 0
+                for m in months))
+
+    def test_empty_year_uses_current(self):
+        today = datetime.date.today()
+        jy_now, _, _ = gregorian_to_jalali(today.year, today.month, today.day)
+        months = reports.get_sales_channels()
+        self.assertEqual(len(months), 12)
+        self.assertEqual(months[0]["jy"], jy_now)

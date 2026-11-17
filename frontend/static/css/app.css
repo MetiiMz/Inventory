@@ -1071,6 +1071,15 @@ tr.row-selected { background: var(--accent-soft) !important; }
   font-variant-numeric: tabular-nums;
 }
 
+/* یادداشت زیر اسطورة‌ی نمودارِ تعداد فروش */
+.chart-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: right;
+  line-height: 1.5;
+}
+
 /* ------------------------------------------------ misc lists */
 
 .line-item {

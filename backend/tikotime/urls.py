@@ -74,6 +74,7 @@ urlpatterns = [
 
     # dashboard chart
     path("api/reports/monthly-activity", compat.api_monthly_activity),
+    path("api/reports/sales-channels", compat.api_sales_channels),
 
     # export / import
     path("export/<kind>.<fmt>", compat.export_file),
