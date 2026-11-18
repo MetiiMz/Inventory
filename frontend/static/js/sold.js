@@ -406,6 +406,18 @@ $("#btn-save-edit").addEventListener("click", async () => {
   payload.customer_phone = toEnDigits(payload.customer_phone || "").trim();
   const type = form.querySelector('[name="payment_type"]').value;
   if (type === "deposit") {
+    const paidNow = +payload.paid_amount || 0;
+    const salePrice = +payload.sale_price || 0;
+    if (paidNow < 1) {
+      toast("برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید", "error");
+      btn.disabled = false;
+      return;
+    }
+    if (salePrice > 0 && paidNow >= salePrice - 0.001) {
+      toast("مبلغ بیعانه نمی‌تواند برابر یا بیشتر از قیمت فروش باشد؛ برای تسویه کامل «نقدی» را انتخاب کنید", "error");
+      btn.disabled = false;
+      return;
+    }
     payload.deposit_amount = payload.paid_amount;
     delete payload.paid_amount;
   } else if (type === "credit") {

@@ -433,9 +433,16 @@ $("#btn-save-sale").addEventListener("click", async () => {
   if (!form.reportValidity()) return;
   const paymentType = form.querySelector('[name="payment_type"]').value;
   const paidNow = parseMoneyInput(form.querySelector('[name="paid_amount"]'));
-  if (paymentType === "deposit" && paidNow < 1) {
-    toast("برای فروش بیعانه، مبلغ بیعانه را وارد کنید", "error");
-    return;
+  const salePrice = parseMoneyInput(form.querySelector('[name="sale_price"]'));
+  if (paymentType === "deposit") {
+    if (paidNow < 1) {
+      toast("برای فروش بیعانه، دست‌کم مبلغ بیعانه را وارد کنید", "error");
+      return;
+    }
+    if (salePrice > 0 && paidNow >= salePrice - 0.001) {
+      toast("مبلغ بیعانه نمی‌تواند برابر یا بیشتر از قیمت فروش باشد؛ برای تسویه کامل «نقدی» را انتخاب کنید", "error");
+      return;
+    }
   }
   const payload = {
     product_id: saleProductId,
@@ -448,6 +455,9 @@ $("#btn-save-sale").addEventListener("click", async () => {
     notes: form.querySelector('[name="notes"]').value,
     invoice_code: form.querySelector('[name="invoice_code"]').value.trim(),
   };
+  // بیعانه: مبلغ دست‌کم را بفرست (backend برای payment_type=deposit از deposit_amount می‌خواند)
+  if (paymentType === "deposit") payload.deposit_amount = String(paidNow);
+  // نقدی/اعتباری: فیلد پرداخت (±paid_amount) ارسال نمی‌شود
   const btn = $("#btn-save-sale");
   if (paymentType === "credit") {
     const cp = form.querySelector("[name='credit_provider']").value;
