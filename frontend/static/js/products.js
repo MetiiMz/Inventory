@@ -370,7 +370,7 @@ $("#sale-payment-chips").addEventListener("click", (e) => {
   $("#pay-basis-hint").textContent = chip.dataset.pay === "deposit"
     ? "فروش بیعانه — مانده در «پرداخت‌ها» پیگیری می‌شود"
     : chip.dataset.pay === "credit"
-      ? "فروش اعتباری — پرداخت در آینده تسویه می‌شود"
+      ? "مثل تسویه کامل ثبت می‌شود؛ سرویس انتخاب‌شده مبلغ را به فروشگاه پرداخت می‌کند و مشتری اقساط را با خود سرویس تسویه می‌کند. این فروش در صفحه‌ی پرداخت‌ها نمی‌آید."
       : "فروش کامل — تسویه‌شده ثبت می‌شود";
   if (chip.dataset.pay !== "credit") {
     $$("#sale-credit-provider-chips .chip").forEach((c) => c.classList.remove("active"));

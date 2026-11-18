@@ -192,7 +192,7 @@
     {% if recent_sales %}
     <div class="table-wrap">
       <table class="data compact">
-        <thead><tr><th>ساعت</th><th>تاریخ</th><th>قیمت</th><th>سود</th></tr></thead>
+        <thead><tr><th>ساعت</th><th>تاریخ</th><th>قیمت</th><th>سود</th><th>پرداخت</th></tr></thead>
         <tbody>
           {% for s in recent_sales %}
           <tr>
@@ -208,6 +208,15 @@
             <td class="muted">{{ s.sale_date_fa }}</td>
             <td class="num">{{ s.sale_price_display }}</td>
             <td class="num" style="color: var(--green)">{{ s.profit_display }}</td>
+            <td>
+              {% if s.payment_type == "credit" %}
+                <span class="badge blue plain">اعتباری</span> {{ s.credit_provider_fa }}{% if s.credit_tracking_code %} <span class="code-pill" style="font-size:11px">{{ s.credit_tracking_code }}</span>{% endif %}
+              {% elif s.payment_type == "deposit" %}
+                <span class="badge amber plain">بیعانه</span>
+              {% else %}
+                <span class="badge green plain">تسویه کامل</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
