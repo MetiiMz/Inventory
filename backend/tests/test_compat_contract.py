@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for inventory.api.compat — the exact JSON contract the frontend uses."""
 import json
+from pathlib import Path
 
 from django.test import TestCase
 
@@ -306,3 +307,42 @@ class CompatMiscContractTests(TestCase):
             self.assertEqual(r.status_code, 200, url)
         r = self.client.get("/")
         self.assertEqual(r.status_code, 302)
+
+    def test_dashboard_renders_both_charts(self):
+        """The dashboard carries the activity chart AND the channels chart,
+        each with its own unique ids and server-rendered first-paint data."""
+        html = self.client.get("/dashboard").content.decode("utf-8")
+        for token in (
+            'id="sales-chart"', 'data-monthly=', 'id="chart-title"',
+            'id="chart-prev-year"', 'id="chart-year-label"', 'id="chart-next-year"',
+            'id="channels-chart"', 'data-channels=', 'id="channels-title"',
+            'id="channels-prev-year"', 'id="channels-year-label"', 'id="channels-next-year"',
+            "js/dashboard-charts.js",
+            "فروش اعتباری در نوع (حضوری/آنلاین) خودش هم شمرده می‌شود.",
+        ):
+            self.assertIn(token, html)
+        # the old dashed count series are gone from the activity chart
+        self.assertNotIn("تعداد حضوری", html)
+        self.assertNotIn("تعداد آنلاین", html)
+        # ids are unique across the page
+        import re
+        ids = re.findall(r'id="([^"]+)"', html)
+        self.assertEqual(len(ids), len(set(ids)), "duplicate element ids")
+
+    def test_dashboard_scripts_are_balanced(self):
+        """Every <script> on the dashboard is closed, and the shared chart
+        engine is loaded before it is used — an unclosed inline script makes
+        the browser parse the next `<script src>` as text ("Unexpected token
+        '<'") so both charts stay empty."""
+        html = self.client.get("/dashboard").content.decode("utf-8")
+        self.assertEqual(html.count("<script"), html.count("</script>"))
+        self.assertIn("initChart(", html)
+        self.assertLess(html.index("js/dashboard-charts.js"), html.index("initChart("))
+        # the engine exposes exactly the shared entry point the pages call
+        js_path = (
+            Path(__file__).resolve().parents[2]
+            / "frontend" / "static" / "js" / "dashboard-charts.js"
+        )
+        js = js_path.read_text(encoding="utf-8")
+        self.assertIn("function initChart(cfg)", js)
+        self.assertNotIn("createDashboardLineChart", js)

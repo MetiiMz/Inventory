@@ -444,6 +444,9 @@ class LegacyApiBaselineTests(TestCase):
         self.assertNamedKeys(body, ("year", "months"))
         self.assertEqual(body["year"], jy)
         self.assertEqual(len(body["months"]), 12)
+        # the count series moved out of this endpoint (Spec: channels chart)
+        for gone in ("person_count", "online_count"):
+            self.assertNotIn(gone, body["months"][0])
 
         default = self.client.get("/api/reports/monthly-activity")
         self.assertTrue(default.json()["ok"])
@@ -453,6 +456,28 @@ class LegacyApiBaselineTests(TestCase):
             self.client.get("/api/reports/monthly-activity", {"year": "abc"}), 400)
         self.assertLegacyError(
             self.client.get("/api/reports/monthly-activity", {"year": "1200"}), 400)
+
+    def test_sales_channels_report(self):
+        jy, _, _ = today_jalali()
+        r = self.client.get("/api/reports/sales-channels", {"year": str(jy)})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["ok"])
+        self.assertNamedKeys(body, ("year", "months"))
+        self.assertEqual(body["year"], jy)
+        self.assertEqual(len(body["months"]), 12)
+        self.assertNamedKeys(body["months"][0],
+                             ("jy", "jm", "label", "person_count",
+                              "online_count", "credit_count", "future"))
+
+        default = self.client.get("/api/reports/sales-channels")
+        self.assertTrue(default.json()["ok"])
+        self.assertNamedKeys(default.json(), ("year", "months"))
+
+        self.assertLegacyError(
+            self.client.get("/api/reports/sales-channels", {"year": "abc"}), 400)
+        self.assertLegacyError(
+            self.client.get("/api/reports/sales-channels", {"year": "1200"}), 400)
 
     # ======================================== T008: export, import, backups
     def test_export_files_and_import_template(self):

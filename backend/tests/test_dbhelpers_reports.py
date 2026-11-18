@@ -324,12 +324,50 @@ class ReportTests(TestCase):
         self.assertEqual(len(months), 12)
         self.assertEqual(months[0]["jy"], 1404)
         self.assertEqual(months[0]["jm"], 1)
+        # the count series moved to get_sales_channels — no longer here
+        for gone in ("person_count", "online_count"):
+            self.assertNotIn(gone, months[0])
         # 1404 is entirely in the past → nothing is marked future
         self.assertFalse(months[0]["future"])
         # a future year is all zeros + future flags
         months = reports.get_monthly_activity(1500)
         self.assertTrue(months[0]["future"])
         self.assertEqual(months[0]["revenue"], 0)
+
+    def test_sales_channels_per_month_counts(self):
+        p = make_product(purchase_date="2025-04-01")  # فروردین ۱۴۰۴
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2025-04-05", customer="a", customer_phone="09120000001",
+            sale_type="person", payment_type="cash")
+        Sale.objects.create(
+            product=p, sale_price=200, purchase_price=20, profit=180,
+            sale_date="2025-04-06", customer="b", customer_phone="09120000002",
+            sale_type="online", payment_type="credit", credit_provider="torob")
+        months = reports.get_sales_channels(1404)
+        self.assertEqual(len(months), 12)
+        far = months[0]
+        self.assertEqual((far["jy"], far["jm"]), (1404, 1))
+        self.assertEqual(far["label"], "فروردین")
+        # online+credit counts in BOTH dimensions
+        self.assertEqual(far["person_count"], 1)
+        self.assertEqual(far["online_count"], 1)
+        self.assertEqual(far["credit_count"], 1)
+        self.assertFalse(far["future"])
+        # other months of a fully-past year are zero but not future
+        self.assertEqual(months[1]["person_count"], 0)
+        self.assertFalse(months[1]["future"])
+        # an empty year returns 12 zeroed months
+        empty = reports.get_sales_channels(1403)
+        self.assertEqual(len(empty), 12)
+        self.assertEqual(sum(m["person_count"] + m["online_count"] + m["credit_count"]
+                             for m in empty), 0)
+        # a future year is all zeros + future flags
+        fut = reports.get_sales_channels(1500)
+        self.assertTrue(fut[0]["future"])
+        self.assertEqual(
+            (fut[0]["person_count"], fut[0]["online_count"], fut[0]["credit_count"]),
+            (0, 0, 0))
 
     def test_brand_breakdown_in_stock_only(self):
         # (Spec-002, corrected) a brand with stock but no sales: stock

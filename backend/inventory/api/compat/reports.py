@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Dashboard report adapter: monthly activity over /api/reports."""
+"""Dashboard report adapters over /api/reports."""
 
 from inventory.api import services
 
@@ -13,3 +13,10 @@ def api_monthly_activity(request):
         return _ok(year=year, months=months)
     return _guard(run)
 
+
+def api_sales_channels(request):
+    """GET /api/reports/sales-channels?year=<jy> — per-month channel counts."""
+    def run():
+        year, months = services.sales_channels(request.GET.get("year"))
+        return _ok(year=year, months=months)
+    return _guard(run)

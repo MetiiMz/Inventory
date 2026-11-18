@@ -12,6 +12,7 @@ from django.test import TestCase, override_settings
 from inventory.api import services
 from inventory.api.services import ApiError
 from inventory import excel_io
+from inventory.jalali import gregorian_to_jalali
 from inventory.models import Product, Repair, Sale
 from inventory.utils import fa_money
 from tests.helpers import make_product, sale_payload, today_iso
@@ -91,28 +92,57 @@ class CalendarServiceTests(TestCase):
         _, err = call(services.monthly_activity, "99999")
         self.assertIn("بازه", err.message)
 
-    def test_monthly_activity_sale_type_counts(self):
-        # Spec-002 (US5): the chart gains in-person/online count series
-        p = make_product(purchase_date="2026-09-01")
+    def test_sales_channels_validation(self):
+        # same year-validation contract as monthly_activity (shared helper)
+        year, months = services.sales_channels("1404")
+        self.assertEqual(year, 1404)
+        self.assertEqual(len(months), 12)
+        year, months = services.sales_channels("")
+        self.assertEqual(len(months), 12)
+        _, err = call(services.sales_channels, "not-a-year")
+        self.assertIn("نامعتبر", err.message)
+        _, err = call(services.sales_channels, "99999")
+        self.assertIn("بازه", err.message)
+
+    def test_sales_channels_counts(self):
+        # حضوری/آنلاین از sale_type، اعتباری از payment_type — ابعاد مستقل:
+        # یک فروش آنلاینِ اعتباری در هر دو شمارنده می‌آید.
+        # فروش‌ها در ماه جلالی جاری ثبت می‌شوند تا تست به تاریخ اجرا وابسته نباشد.
+        iso = today_iso()
+        today = datetime.date.fromisoformat(iso)
+        jy, jm, _ = gregorian_to_jalali(today.year, today.month, today.day)
+        p = make_product(purchase_date=iso)
         Sale.objects.create(
             product=p, sale_price=100, purchase_price=10, profit=90,
-            sale_date="2026-09-10", customer="x", customer_phone="09123456789",
+            sale_date=iso, customer="x", customer_phone="09123456789",
             sale_type="person", paid_cash=100, payment_type="cash")
         Sale.objects.create(
             product=p, sale_price=200, purchase_price=20, profit=180,
-            sale_date="2026-09-11", customer="y", customer_phone="09123456788",
+            sale_date=iso, customer="y", customer_phone="09123456788",
             sale_type="online", paid_cash=200, payment_type="cash")
-        _, months = services.monthly_activity("1405")
-        hit = next((m for m in months if m["person_count"] or m["online_count"]), None)
-        self.assertIsNotNone(hit)
+        Sale.objects.create(
+            product=p, sale_price=300, purchase_price=30, profit=270,
+            sale_date=iso, customer="z", customer_phone="09123456787",
+            sale_type="online", paid_cash=0, payment_type="credit",
+            credit_provider="torob", is_settled=False)
+        # unknown sale_type → not counted in person/online
+        Sale.objects.create(
+            product=p, sale_price=400, purchase_price=40, profit=360,
+            sale_date=iso, customer="w", customer_phone="09123456786",
+            sale_type="", paid_cash=400, payment_type="cash")
+        _, months = services.sales_channels(str(jy))
+        hit = next(m for m in months if m["jm"] == jm)
         self.assertEqual(hit["person_count"], 1)
-        self.assertEqual(hit["online_count"], 1)
-        self.assertEqual(hit["count"], 2)
-        for m in months:
-            if m is hit:
-                continue
-            self.assertEqual(m["person_count"], 0)
-            self.assertEqual(m["online_count"], 0)
+        self.assertEqual(hit["online_count"], 2)   # online + online-credit
+        self.assertEqual(hit["credit_count"], 1)   # the online credit sale
+        self.assertFalse(hit["future"])
+        # every other month is zero — including the future ones of the current year
+        others = [m for m in months if m["jm"] != jm]
+        self.assertEqual(len(others), 11)
+        for m in others:
+            self.assertEqual(
+                (m["person_count"], m["online_count"], m["credit_count"]),
+                (0, 0, 0))
 
 
 class UploadServiceTests(TestCase):

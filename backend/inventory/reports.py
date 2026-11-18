@@ -67,10 +67,54 @@ def get_monthly_activity(jy=None):
     if jy is None:
         jy = jy_now
 
-    months_list = [(jy, jm) for jm in range(1, 13)]
+    ranges = _jalali_month_ranges(jy)
 
+    # سرعت: کل بازه را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
+    sales_rows = Sale.objects.values_list(
+        "sale_date", "sale_price", "profit")
+    prod_rows = Product.objects.exclude(purchase_date="").values_list("purchase_date", "purchase_price")
+
+    sales_by_month = {}
+    for sdate, sale_price, profit in sales_rows:
+        if not sdate:
+            continue
+        key = _month_key(sdate)
+        agg = sales_by_month.setdefault(key, [0.0, 0.0, 0])
+        agg[0] += sale_price or 0
+        agg[1] += profit or 0
+        agg[2] += 1
+
+    prod_by_month = {}
+    for pdate, pprice in prod_rows:
+        key = _month_key(pdate)
+        prod_by_month[key] = prod_by_month.get(key, 0.0) + (pprice or 0)
+
+    out = []
+    for (jy, jm), start, end in ranges:
+        s = sales_by_month.get((jy, jm), [0.0, 0.0, 0])
+        future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
+        out.append({
+            "jy": jy, "jm": jm,
+            "label": MONTH_NAMES[jm - 1],
+            "revenue": 0 if future else s[0],
+            "profit": 0 if future else s[1],
+            "count": 0 if future else s[2],
+            "purchase_value": 0 if future else prod_by_month.get((jy, jm), 0.0),
+            "future": future,
+        })
+    return out
+
+
+def _month_key(iso):
+    """ISO میلادی (YYYY-MM-DD) → (jy, jm) جلالی."""
+    y, m, d = (int(x) for x in iso[:10].split("-"))
+    return gregorian_to_jalali(y, m, d)[:2]
+
+
+def _jalali_month_ranges(jy):
+    """[( (jy, jm), start_iso, end_iso )] for فروردین تا اسفند of ``jy``."""
     ranges = []
-    for jy, jm in months_list:
+    for jm in range(1, 13):
         gy1, gm1, gd1 = jalali_to_gregorian(jy, jm, 1)
         last = jalali_month_length(jy, jm)
         gy2, gm2, gd2 = jalali_to_gregorian(jy, jm, last)
@@ -79,49 +123,52 @@ def get_monthly_activity(jy=None):
             datetime.date(gy1, gm1, gd1).isoformat(),
             datetime.date(gy2, gm2, gd2).isoformat(),
         ))
+    return ranges
 
-    # سرعت: کل بازه را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
+
+def get_sales_channels(jy=None):
+    """تعداد فروش هر ماه جلالی به تفکیک نوع فروش و نحوه‌ی پرداخت.
+
+    حضوری/آنلاین از ``sale_type`` و اعتباری از ``payment_type`` شمرده
+    می‌شوند؛ این‌ها ابعاد مستقلی هستند، پس یک فروشِ آنلاینِ اعتباری در
+    هر دو شمارنده می‌آید. فروش با ``sale_type`` ناشناخته در هیچ‌یک از
+    دو نوع شمرده نمی‌شود. مثل ``get_monthly_activity``، ماه‌های بعد
+    از ماه جاری با future=True و صفر برمی‌گردند.
+    """
+    today = datetime.date.today()
+    jy_now, jm_now, _ = gregorian_to_jalali(today.year, today.month, today.day)
+    if jy is None:
+        jy = jy_now
+
+    ranges = _jalali_month_ranges(jy)
+
+    # سرعت: کل سال را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
     sales_rows = Sale.objects.values_list(
-        "sale_date", "sale_price", "profit", "sale_type")
-    prod_rows = Product.objects.exclude(purchase_date="").values_list("purchase_date", "purchase_price")
+        "sale_date", "sale_type", "payment_type")
 
-    def month_of(iso):
-        # ISO میلادی → (jy, jm)
-        y, m, d = (int(x) for x in iso[:10].split("-"))
-        return gregorian_to_jalali(y, m, d)[:2]
-
-    sales_by_month = {}
-    for sdate, sale_price, profit, sale_type in sales_rows:
+    counts_by_month = {}
+    for sdate, sale_type, payment_type in sales_rows:
         if not sdate:
             continue
-        key = month_of(sdate)
-        agg = sales_by_month.setdefault(key, [0.0, 0.0, 0, 0, 0])
-        agg[0] += sale_price or 0
-        agg[1] += profit or 0
-        agg[2] += 1
+        key = _month_key(sdate)
+        agg = counts_by_month.setdefault(key, {"person": 0, "online": 0, "credit": 0})
         if sale_type == "person":
-            agg[3] += 1
+            agg["person"] += 1
         elif sale_type == "online":
-            agg[4] += 1
-
-    prod_by_month = {}
-    for pdate, pprice in prod_rows:
-        key = month_of(pdate)
-        prod_by_month[key] = prod_by_month.get(key, 0.0) + (pprice or 0)
+            agg["online"] += 1
+        if payment_type == "credit":
+            agg["credit"] += 1
 
     out = []
     for (jy, jm), start, end in ranges:
-        s = sales_by_month.get((jy, jm), [0.0, 0.0, 0, 0, 0])
+        c = counts_by_month.get((jy, jm), {"person": 0, "online": 0, "credit": 0})
         future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
         out.append({
             "jy": jy, "jm": jm,
             "label": MONTH_NAMES[jm - 1],
-            "revenue": 0 if future else s[0],
-            "profit": 0 if future else s[1],
-            "count": 0 if future else s[2],
-            "person_count": 0 if future else s[3],
-            "online_count": 0 if future else s[4],
-            "purchase_value": 0 if future else prod_by_month.get((jy, jm), 0.0),
+            "person_count": 0 if future else c["person"],
+            "online_count": 0 if future else c["online"],
+            "credit_count": 0 if future else c["credit"],
             "future": future,
         })
     return out
