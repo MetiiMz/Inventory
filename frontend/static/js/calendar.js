@@ -120,6 +120,51 @@ function eventItem(e, kind) {
 
 /* ------------------------------------------------ مودال جزئیات رویداد */
 
+/* کارت ۲ برای خرید — «اطلاعات موجودی»: وضعیت + یادداشت (فقط وقتی هست) */
+function sdBuyStockTiles(d) {
+  const tiles = [[
+    "وضعیت",
+    d.is_available
+      ? '<span class="badge green plain">موجود</span>'
+      : '<span class="badge red plain">ناموجود</span>',
+    null, true,
+  ]];
+  if (d.notes && String(d.notes).trim()) {
+    tiles.push(["یادداشت", esc(d.notes), "sd-notes", true]);
+  }
+  return tiles;
+}
+
+/* کارت ۱ تعمیر — «اطلاعات ساعت»: کد ساعت + ایراد (تمام‌عرض، چندخطی) */
+function sdRepairWatchTiles(d) {
+  return [
+    ["کد ساعت", sdCode(d.watch_code), null, true],
+    ["ایراد", esc(d.issue), "sd-pre", true],
+  ];
+}
+
+/* کارت ۲ تعمیر — «اطلاعات تعمیر» (هر دو تاریخ برای دریافت و بازگشت) */
+function sdRepairInfoTiles(d) {
+  const price = Number(d.repair_price) || 0;
+  const tiles = [
+    ["مشتری", esc(d.customer_name)],
+    ["شماره تماس مشتری", esc(d.customer_phone_fa)],
+    ["تاریخ دریافت", esc(d.delivery_date_fa)],
+    ["تاریخ بازگشت", esc(d.return_date_fa)],
+    ["گارانتی", esc(d.is_warranty_fa)],
+    ["وضعیت", d.status_fa
+      ? `<span class="badge ${d.status_color || "gray"} plain">${esc(d.status_fa)}</span>` : ""],
+    ["هزینه تعمیر", price > 0 ? sdMoney(d.repair_price_display) : ""],
+  ];
+  if (d.notes && String(d.notes).trim()) {
+    // یادداشت تمام‌عرض است؛ اگر تعداد کاشی‌های پیش از آن فرد باشد، کاشی
+    // آخر هم تمام‌عرض می‌شود تا خانه‌ی خالی در شبکه‌ی دوستونه نماند
+    if (tiles.length % 2 === 1) tiles[tiles.length - 1][3] = true;
+    tiles.push(["یادداشت", esc(d.notes), "sd-notes", true]);
+  }
+  return tiles;
+}
+
 function showEventDetail(kind, id) {
   if (!lastDayData) return;
   let d = null;
@@ -136,72 +181,30 @@ function showEventDetail(kind, id) {
     rep_out: "ساعت تعمیری — بازگشت",
   }[kind];
 
-  let rows = "";
-  const add = (k, v) => { if (v && String(v).trim()) rows += `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`; };
+  let html = "";
 
-  /* تصویر و نام ساعت بالای جزئیات */
-  const img = d.product_image || d.image || "";
-  const imgName = kind === "sell" ? (d.product_name || "محصول حذف‌شده")
-    : kind === "buy" ? d.name : d.watch_name;
-  rows += `<div class="prod-cell" style="margin-bottom:12px">
-    ${img
-      ? `<img class="thumb" style="width:52px;height:52px;border-radius:12px" src="/data/images/${encodeURIComponent(img)}" alt="">`
-      : `<span class="thumb" style="width:52px;height:52px;border-radius:12px"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/></svg></span>`}
-    <div><div class="p-name">${esc(imgName)}</div></div>
-  </div>`;
-
-  if (kind === "buy") {
-    add("نام ساعت", esc(d.name));
-    add("کد دفتر فروشگاه", `<span class="code-pill">${esc(d.office_code)}</span>`);
-    add("کد انبار سایت", `<span class="code-pill">${esc(d.website_code)}</span>`);
-    add("برند", esc(d.brand));
-    add("رفرنس", esc(d.reference));
-    add("قیمت خرید", d.purchase_price_display ? d.purchase_price_display + " تومان" : "");
-    add("تأمین‌کننده", esc(d.supplier));
-    add("وضعیت", d.is_available ? '<span class="badge green plain">موجود</span>' : '<span class="badge red plain">ناموجود</span>');
-    add("یادداشت", esc(d.notes));
-  } else if (kind === "sell") {
-    add("کد فاکتور", d.invoice_code ? `<span class="code-pill">${esc(d.invoice_code)}</span>` : "");
-    add("کد دفتر فروشگاه", d.office_code ? `<span class="code-pill">${esc(d.office_code)}</span>` : "");
-    add("کد انبار سایت", d.website_code ? `<span class="code-pill">${esc(d.website_code)}</span>` : "");
-    add("برند", esc(d.brand));
-    add("رفرنس", esc(d.reference));
-    add("قیمت فروش", d.sale_price_display + " تومان");
-    add("قیمت خرید", d.purchase_price_display ? d.purchase_price_display + " تومان" : "");
-    add("سود این فروش", `<span style="color:var(--green)">${d.profit_display} تومان</span>`);
-    add("خریدار", esc(d.customer));
-    add("شماره تماس خریدار", d.customer_phone_fa || "");
-    add("نوع فروش", d.sale_type_fa || "");
-    add("نوع پرداخت", d.payment_type_fa || "");
-    if (d.payment_type === "credit") {
-      add("سرویس", esc(d.credit_provider_fa));
-      add("کد رهگیری", `<span class="code-pill" dir="ltr">${esc(d.credit_tracking_code)}</span>`);
-    } else if (d.payment_type === "deposit") {
-      add("وضعیت تسویه", d.is_settled
-        ? '<span class="badge green plain">تسویه شده</span>'
-        : '<span class="badge amber plain">در انتظار تسویه</span>');
-      add("مبلغ پرداخت‌شده", d.paid_total_display + " تومان");
-    } else {
-      add("ریز پرداخت", d.paid_breakdown_fa || "");
+  if (kind === "sell") {
+    /* دقیقاً همان کارت‌های صفحه‌ی فروش‌ها (کد مشترک در detail-cards.js) */
+    const [pColor, pLabel] = PAYMENT_BADGE[d.payment_type] || ["gray", d.payment_type];
+    const saleTiles = (SD_SALE_TILES[d.payment_type] || SD_SALE_TILES.cash)(d, pColor, pLabel);
+    if (d.notes && String(d.notes).trim()) {
+      saleTiles.push(["یادداشت", esc(d.notes), "sd-notes", true]);
     }
-    add("تاریخ فروش", d.sale_date_fa);
-    add("یادداشت", esc(d.notes));
+    html = sdHeader(d.product_image, d.product_name || "محصول حذف‌شده") +
+      sdCard("اطلاعات ساعت", SD_INFO_TILES(d)) +
+      sdCard("اطلاعات فروش", saleTiles);
+  } else if (kind === "buy") {
+    html = sdHeader(d.image, d.name) +
+      sdCard("اطلاعات ساعت", SD_INFO_TILES(d)) +
+      sdCard("اطلاعات موجودی", sdBuyStockTiles(d));
   } else {
-    add("نام ساعت", esc(d.watch_name));
-    add("کد ساعت", esc(d.watch_code));
-    add("ایراد", esc(d.issue));
-    add("مشتری", `${esc(d.customer_name)}${d.customer_phone ? " — " + faNum(d.customer_phone) : ""}`);
-    add("تاریخ دریافت", d.delivery_date_fa);
-    add("تاریخ بازگشت", d.return_date_fa);
-    add("گارانتی", d.is_warranty_fa);
-    add("وضعیت", d.status_fa);
-    add("هزینه تعمیر", d.repair_price ? d.repair_price_display + " تومان" : "");
-    add("یادداشت", esc(d.notes));
+    html = sdHeader(d.image, d.watch_name) +
+      sdCard("اطلاعات ساعت", sdRepairWatchTiles(d)) +
+      sdCard("اطلاعات تعمیر", sdRepairInfoTiles(d));
   }
 
   $("#event-detail-title").textContent = title;
-  $("#event-detail-body").innerHTML = rows ||
-    '<p class="li-sub" style="margin:0">جزئیاتی ثبت نشده است</p>';
+  $("#event-detail-body").innerHTML = html;
   const link = $("#event-detail-link");
   if (kind === "buy") { link.href = "/products"; link.classList.remove("hidden"); link.textContent = "مشاهده در انبار"; }
   else if (kind === "sell") { link.href = `/sold?highlight=${d.id}`; link.classList.remove("hidden"); link.textContent = "مشاهده در فروش‌ها"; }

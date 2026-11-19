@@ -62,16 +62,16 @@
   </aside>
 </div>
 
-<!-- مودال جزئیات رویداد -->
+<!-- مودال جزئیات رویداد (هم‌شکل مودال جزئیات فروش) -->
 <div class="modal-backdrop" id="modal-event-detail">
-  <div class="modal modal-sm">
+  <div class="modal modal-detail">
     <div class="modal-head">
       <h3 id="event-detail-title">جزئیات</h3>
       <button class="modal-close" data-close-modal="modal-event-detail" aria-label="بستن">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6.5 6.5 11 11m0-11-11 11"/></svg>
       </button>
     </div>
-    <div class="modal-body" id="event-detail-body"></div>
+    <div class="modal-body sd-body" id="event-detail-body"></div>
     <div class="modal-foot">
       <a class="btn btn-sm hidden" id="event-detail-link" href="#"></a>
       <button class="btn" data-close-modal="modal-event-detail" type="button">بستن</button>
@@ -81,5 +81,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ static_v('js/detail-cards.js') }}"></script>
 <script src="{{ static_v('js/calendar.js') }}"></script>
 {% endblock %}

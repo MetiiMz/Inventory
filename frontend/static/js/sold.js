@@ -5,11 +5,8 @@
 
 "use strict";
 
-const PAYMENT_BADGE = {
-  cash: ["green", "تسویه کامل"],
-  deposit: ["amber", "بیعانه"],
-  credit: ["blue", "اعتباری"],
-};
+/* PAYMENT_BADGE و سازنده‌های کارت‌های جزئیات (sdCard/sdTile/…) در
+   js/detail-cards.js هستند که پیش از این فایل بارگذاری می‌شود. */
 
 let salesData = { items: [], summary: {} };
 const selectedIds = new Set();
@@ -206,86 +203,7 @@ $("#btn-confirm-bulk-delete").addEventListener("click", async () => {
 
 /* ------------------------------------------------ جزئیات فروش */
 
-/* کاشی‌های مودال جزئیات — همه‌ی مقادیر پیش از رسیدن به این توابع با esc()
-   امن شده‌اند؛ مقدار خالی به «—» تبدیل می‌شود تا شبکه‌ی کارت جابه‌جا نشود. */
-const SD_DASH = '<span class="sd-dash">—</span>';
-
-const sdMoney = (v) => (v === null || v === undefined || String(v).trim() === "" ? "" : `${esc(v)} تومان`);
-
-function sdCode(v, extraClass) {
-  if (!v) return "";
-  return `<span class="code-pill${extraClass ? " " + extraClass : ""}">${esc(v)}</span>`;
-}
-
-function sdTile([label, value, cls, span]) {
-  const empty = value === null || value === undefined || String(value).trim() === "";
-  return `<div class="sd-tile${span ? " span-2" : ""}">` +
-    `<span class="sd-k">${esc(label)}</span>` +
-    `<span class="sd-v${cls ? " " + cls : ""}">${empty ? SD_DASH : value}</span>` +
-    `</div>`;
-}
-
-function sdCard(title, tiles) {
-  // تعداد فرد کاشی یک خانه‌ی خالی در شبکه‌ی دوستونه می‌گذاشت؛
-  // کاشی آخر در این حالت تمام‌عرض می‌شود تا شبکه همیشه پر به نظر برسد
-  const rows = tiles.map((t) => t.slice());
-  if (rows.length % 2 === 1) rows[rows.length - 1][3] = true;
-  return `<section class="sd-card">` +
-    `<h4 class="sd-card-title">${esc(title)}</h4>` +
-    `<div class="sd-grid">${rows.map(sdTile).join("")}</div>` +
-    `</section>`;
-}
-
-/* کارت ۱ — «اطلاعات ساعت»: ترتیب ثابت، مقادیر خالی همیشه با «—» */
-const SD_INFO_TILES = (s) => [
-  ["برند", esc(s.brand)],
-  ["کد رفرانس", sdCode(s.reference)],
-  ["کد دفتر فروشگاه", sdCode(s.office_code, "is-accent")],
-  ["کد انبار سایت", sdCode(s.website_code)],
-  ["قیمت خرید", sdMoney(s.purchase_price_display)],
-  ["تاریخ خرید", esc(s.purchase_date_fa)],
-  ["تأمین‌کننده", esc(s.supplier)],
-];
-
-/* کارت ۲ — «اطلاعات فروش»: سرِ مشترک (خریدار → نوع پرداخت) */
-const SD_SALE_MAIN_TILES = (s, pColor, pLabel) => {
-  const tiles = [];
-  // خریدار و تلفن فقط وقتی اصلاً وجود دارند نمایش داده می‌شوند
-  if (s.customer) tiles.push(["خریدار", esc(s.customer)]);
-  if (s.customer_phone_fa) tiles.push(["شماره تماس خریدار", esc(s.customer_phone_fa)]);
-  tiles.push(
-    ["قیمت فروش", sdMoney(s.sale_price_display)],
-    ["سود این فروش", sdMoney(s.profit_display), "sd-profit"],
-    ["کد فاکتور", sdCode(s.invoice_code)],
-    ["تاریخ فروش", esc(s.sale_date_fa)],
-    ["نوع فروش", esc(s.sale_type_fa)],
-    ["نوع پرداخت", `<span class="badge ${pColor} plain">${esc(pLabel)}</span>`],
-  );
-  return tiles;
-};
-
-/* یک فهرست جدا برای هر نوع پرداخت — دنباله‌ی کارت ۲ */
-const SD_SALE_TILES = {
-  cash: (s, pColor, pLabel) => [
-    ...SD_SALE_MAIN_TILES(s, pColor, pLabel),
-  ],
-  credit: (s, pColor, pLabel) => [
-    ...SD_SALE_MAIN_TILES(s, pColor, pLabel),
-    ["سرویس", esc(s.credit_provider_fa)],
-    ["کد رهگیری", s.credit_tracking_code
-      ? `<span class="code-pill" dir="ltr">${esc(s.credit_tracking_code)}</span>` : ""],
-  ],
-  deposit: (s, pColor, pLabel) => [
-    ...SD_SALE_MAIN_TILES(s, pColor, pLabel),
-    ["پرداخت‌شده تاکنون", sdMoney(s.deposit_paid_amount_display)],
-    ...(Number(s.deposit_remaining) > 0
-      ? [["مانده", sdMoney(s.deposit_remaining_display)]]
-      : []),
-    ["وضعیت تسویه", s.is_settled
-      ? `<span class="badge green plain">تسویه شده${s.settled_at_fa ? " — " + esc(s.settled_at_fa) : ""}</span>`
-      : '<span class="badge amber plain">در انتظار تسویه</span>'],
-  ],
-};
+/* کاشی‌ها/sdCard/sdHeader در js/detail-cards.js تعریف شده‌اند. */
 
 function showSaleDetail(s) {
   currentDetail = s;
@@ -293,15 +211,7 @@ function showSaleDetail(s) {
   const name = s.product_name || "محصول حذف‌شده";
 
   // تصویر ساعت (کلیک روی آن لایت‌باکس سراسری را باز می‌کند) + نام
-  const head = `
-    <div class="sd-header">
-      ${s.product_image
-        ? `<img class="thumb sd-thumb" src="/data/images/${encodeURIComponent(s.product_image)}" alt="" loading="lazy">`
-        : `<span class="thumb sd-thumb"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/></svg></span>`}
-      <div class="sd-head-text">
-        <h4 class="sd-name">${esc(name)}</h4>
-      </div>
-    </div>`;
+  const head = sdHeader(s.product_image, name);
 
   const saleTiles = (SD_SALE_TILES[s.payment_type] || SD_SALE_TILES.cash)(s, pColor, pLabel);
   if (s.notes && String(s.notes).trim()) {

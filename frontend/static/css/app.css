@@ -803,17 +803,17 @@ tr.row-selected { background: var(--accent-soft) !important; }
 
 /* ------------------------------------------------ sale detail modal */
 
-/* مودال جزئیات فروش: کمی پهن‌تر، سر/پا ثابت و بدنه‌ی اسکرول‌شونده */
-.modal.modal-detail { max-width: 760px; }
-#modal-sale-detail .modal {
+/* مودال جزئیات (فروش‌ها و تقویم): کمی پهن‌تر، سر/پا ثابت و بدنه‌ی اسکرول‌شونده */
+.modal.modal-detail {
+  max-width: 760px;
   display: flex;
   flex-direction: column;
   max-height: 90vh;
 }
-#modal-sale-detail .modal-head,
-#modal-sale-detail .modal-foot { flex: 0 0 auto; }
+.modal.modal-detail .modal-head,
+.modal.modal-detail .modal-foot { flex: 0 0 auto; }
 /* خط مویی بالای فوتر: بدنه‌ی اسکرول‌شونده از دکمه‌ها جدا دیده شود */
-#modal-sale-detail .modal-foot { border-top: 1px solid var(--hairline); }
+.modal.modal-detail .modal-foot { border-top: 1px solid var(--hairline); }
 
 .sd-body {
   flex: 1 1 auto;
@@ -883,11 +883,13 @@ tr.row-selected { background: var(--accent-soft) !important; }
 .sd-dash { color: var(--text-3); font-weight: 600; }
 .sd-profit { color: var(--green); }
 .sd-notes { font-weight: 600; color: var(--text-2); white-space: pre-line; }
+/* متن چندخطی (مثل «ایراد» ساعت تعمیری): شکست خط‌ها حفظ می‌شود */
+.sd-pre { font-weight: 600; color: var(--text-2); white-space: pre-wrap; }
 .sd-v .code-pill { font-size: 12px; padding: 3px 9px; max-width: 100%; overflow-wrap: anywhere; }
 .sd-v .code-pill.is-accent { background: var(--accent-soft); color: var(--accent); }
 
 @media (max-width: 600px) {
-  #modal-sale-detail .modal { max-height: 92vh; }
+  .modal.modal-detail { max-height: 92vh; }
   .sd-header { gap: 12px; margin-bottom: 14px; }
   .thumb.sd-thumb { width: 72px; height: 72px; border-radius: 16px; }
   .sd-thumb svg { width: 28px; height: 28px; }
