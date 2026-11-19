@@ -574,17 +574,39 @@ class LegacyApiBaselineTests(TestCase):
             Setting.objects.filter(key="store_name", value="نام تازه").exists())
 
     # ======================================== T008: unknown-path behaviour
-    def test_unknown_api_path_is_default_404(self):
-        """Measured behaviour (see spec FR-014): Django's default 404 — the custom
-        handler404 in inventory/views/pages.py is NOT wired into ROOT_URLCONF, so
-        there is no JSON envelope and no redirect."""
-        self.assertDefaultNotFound(self.client.get("/api/unknown-path"))
-        self.assertDefaultNotFound(self.client.get("/api/definitely-not-a-route"))
+    def test_unknown_api_path_returns_json_404(self):
+        """handler404 is now wired into ROOT_URLCONF: unknown API paths answer
+        with the app's Persian JSON 404 (``{ok: false, error: "یافت نشد"}``,
+        status 404) — not Django's default page and not a redirect."""
+        self.assertLegacyError(self.client.get("/api/unknown-path"), 404)
+        self.assertLegacyError(self.client.get("/api/definitely-not-a-route"), 404)
 
-    def test_unknown_page_path_is_default_404(self):
-        self.assertDefaultNotFound(self.client.get("/no-such-page"))
-        # the pages that DO exist still answer with 200 / 302 (baseline intact)
+    def test_unknown_page_path_redirects_to_dashboard(self):
+        """handler404 is wired: unknown page paths redirect to /dashboard
+        (status 302); existing pages still answer 200."""
+        resp = self.client.get("/no-such-page")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.headers.get("Location"), "/dashboard")
         for url in ("/dashboard", "/products", "/calendar", "/repairs",
                     "/sold", "/tracking", "/payments", "/settings"):
             self.assertEqual(self.client.get(url).status_code, 200, url)
         self.assertEqual(self.client.get("/").status_code, 302)
+
+    def test_dashboard_recent_sales_div_balance(self):
+        """A customer-less sale must not leave an unmatched ``</div>`` in the
+        recent-sales table block (regression for the stray ``</div>`` outside
+        the ``{% if s.customer %}`` in dashboard.html)."""
+        p = make_product(office_code="OF-DIV1", website_code="WS-DIV1")
+        Sale.objects.create(
+            product=p, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2025-04-05", customer="", customer_phone="",
+            sale_type="person", payment_type="cash")
+        resp = self.client.get("/dashboard")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        start = html.index("<table class=\"data compact\">")
+        end = html.index("</table>", start) + len("</table>")
+        block = html[start:end]
+        self.assertEqual(
+            block.count("<div"), block.count("</div>"),
+            "unbalanced <div> / </div> in recent-sales table block")

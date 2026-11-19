@@ -68,11 +68,15 @@ def get_monthly_activity(jy=None):
         jy = jy_now
 
     ranges = _jalali_month_ranges(jy)
+    lo, hi = ranges[0][1], ranges[-1][2]
 
-    # سرعت: کل بازه را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
-    sales_rows = Sale.objects.values_list(
+    # سرعت: فقط بازه‌ی سال مورد نظر را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
+    sales_rows = Sale.objects.filter(
+        sale_date__gte=lo, sale_date__lte=hi).values_list(
         "sale_date", "sale_price", "profit")
-    prod_rows = Product.objects.exclude(purchase_date="").values_list("purchase_date", "purchase_price")
+    prod_rows = Product.objects.exclude(purchase_date="").filter(
+        purchase_date__gte=lo, purchase_date__lte=hi).values_list(
+        "purchase_date", "purchase_price")
 
     sales_by_month = {}
     for sdate, sale_price, profit in sales_rows:
@@ -90,11 +94,11 @@ def get_monthly_activity(jy=None):
         prod_by_month[key] = prod_by_month.get(key, 0.0) + (pprice or 0)
 
     out = []
-    for (jy, jm), start, end in ranges:
-        s = sales_by_month.get((jy, jm), [0.0, 0.0, 0])
-        future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
+    for (ry, jm), _, _ in ranges:
+        s = sales_by_month.get((ry, jm), [0.0, 0.0, 0])
+        future = (ry > jy_now) or (ry == jy_now and jm > jm_now)
         out.append({
-            "jy": jy, "jm": jm,
+            "jy": ry, "jm": jm,
             "label": MONTH_NAMES[jm - 1],
             "revenue": 0 if future else s[0],
             "profit": 0 if future else s[1],
@@ -141,9 +145,11 @@ def get_sales_channels(jy=None):
         jy = jy_now
 
     ranges = _jalali_month_ranges(jy)
+    lo, hi = ranges[0][1], ranges[-1][2]
 
-    # سرعت: کل سال را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
-    sales_rows = Sale.objects.values_list(
+    # سرعت: فقط بازه‌ی سال مورد نظر را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
+    sales_rows = Sale.objects.filter(
+        sale_date__gte=lo, sale_date__lte=hi).values_list(
         "sale_date", "sale_type", "payment_type", "credit_provider")
 
     counts_by_month = {}
@@ -168,13 +174,13 @@ def get_sales_channels(jy=None):
                 agg["credit_torob"] += 1
 
     out = []
-    for (jy, jm), start, end in ranges:
-        c = counts_by_month.get((jy, jm), {"person": 0, "online": 0,
+    for (ry, jm), _, _ in ranges:
+        c = counts_by_month.get((ry, jm), {"person": 0, "online": 0,
             "credit": 0, "credit_snappay": 0, "credit_digipay": 0,
             "credit_torob": 0})
-        future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
+        future = (ry > jy_now) or (ry == jy_now and jm > jm_now)
         out.append({
-            "jy": jy, "jm": jm,
+            "jy": ry, "jm": jm,
             "label": MONTH_NAMES[jm - 1],
             "person_count": 0 if future else c["person"],
             "online_count": 0 if future else c["online"],

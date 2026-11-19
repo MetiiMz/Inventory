@@ -18,6 +18,8 @@ from django.urls import path
 from inventory.api import compat
 from inventory import views
 
+handler404 = "inventory.views.handler404"
+
 urlpatterns = [
     # ------------------------------------------------- pages (HTML shells)
     path("", views.index, name="index"),

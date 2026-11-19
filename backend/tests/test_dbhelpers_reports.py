@@ -369,6 +369,46 @@ class ReportTests(TestCase):
             (fut[0]["person_count"], fut[0]["online_count"], fut[0]["credit_count"]),
             (0, 0, 0))
 
+    def test_reports_filter_requested_jalali_year_only(self):
+        """Sales in two different Jalali years: only the requested year is
+        counted; a sale in another Jalali year must not leak in."""
+        p1 = make_product(office_code="OF-Y1", website_code="WS-Y1",
+                          purchase_date="2025-04-01")  # فروردین ۱۴۰۴
+        p2 = make_product(office_code="OF-Y2", website_code="WS-Y2",
+                          purchase_date="2026-04-01")  # فروردین ۱۴۰۵
+        Sale.objects.create(
+            product=p1, sale_price=100, purchase_price=10, profit=90,
+            sale_date="2025-04-05", customer="a", customer_phone="09120000001",
+            sale_type="person", payment_type="cash")
+        Sale.objects.create(
+            product=p2, sale_price=200, purchase_price=20, profit=150,
+            sale_date="2026-04-05", customer="b", customer_phone="09120000002",
+            sale_type="online", payment_type="cash")
+
+        m1404 = reports.get_monthly_activity(1404)
+        self.assertEqual(m1404[0]["revenue"], 100)
+        self.assertEqual(m1404[0]["profit"], 90)
+        self.assertEqual(m1404[0]["purchase_value"], 1_000_000.0)
+        self.assertEqual(m1404[0]["count"], 1)
+        # the ۱۴۰۵ sale must not leak into ۱۴۰۴
+        self.assertEqual(sum(m["revenue"] for m in m1404), 100)
+        self.assertEqual(sum(m["profit"] for m in m1404), 90)
+
+        m1405 = reports.get_monthly_activity(1405)
+        self.assertEqual(m1405[0]["revenue"], 200)
+        self.assertEqual(m1405[0]["profit"], 150)
+        self.assertEqual(sum(m["revenue"] for m in m1405), 200)
+
+        c1404 = reports.get_sales_channels(1404)
+        self.assertEqual(c1404[0]["person_count"], 1)
+        self.assertEqual(c1404[0]["online_count"], 0)
+        self.assertEqual(sum(m["person_count"] + m["online_count"] for m in c1404), 1)
+
+        c1405 = reports.get_sales_channels(1405)
+        self.assertEqual(c1405[0]["person_count"], 0)
+        self.assertEqual(c1405[0]["online_count"], 1)
+        self.assertEqual(sum(m["person_count"] + m["online_count"] for m in c1405), 1)
+
     def test_brand_breakdown_in_stock_only(self):
         # (Spec-002, corrected) a brand with stock but no sales: stock
         # columns are real, ALL four sold-* columns are None together

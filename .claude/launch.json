@@ -5,7 +5,7 @@
       "name": "watch-inventory",
       "runtimeExecutable": "./.venv/bin/python",
       "runtimeArgs": [
-        "manage.py",
+        "backend/manage.py",
         "runserver",
         "8000"
       ],

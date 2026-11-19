@@ -198,10 +198,10 @@
           <tr>
             <td>
               <div class="prod-cell">
-                {% if s.product_image %}<img class="thumb" style="width:36px;height:36px;border-radius:10px" src="/data/images/{{ s.product_image }}" alt="">{% else %}<span class="thumb" style="width:36px;height:36px;border-radius:10px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/></svg></span>{% endif %}
+                {% if s.product_image %}<img class="thumb" style="width:36px;height:36px;border-radius:10px" src="/data/images/{{ s.product_image|urlencode }}" alt="">{% else %}<span class="thumb" style="width:36px;height:36px;border-radius:10px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="6.4"/><path d="M12 9.2V12l2.1 1.5"/></svg></span>{% endif %}
                 <div>
                   <div class="p-name">{{ s.product_name or "محصول حذف‌شده" }}</div>
-                  {% if s.customer %}<div class="p-ref">خریدار: {{ s.customer }}{% if s.customer_phone %} — {{ s.customer_phone_fa }}{% endif %}{% endif %}</div>
+                  {% if s.customer %}<div class="p-ref">خریدار: {{ s.customer }}{% if s.customer_phone %} — {{ s.customer_phone_fa }}{% endif %}</div>{% endif %}
                 </div>
               </div>
             </td>
@@ -321,7 +321,7 @@
       `<div class="bt-title">${m.label} ${faNum(m.jy)}</div>`,
       `<div class="bt-row"><span>فروش</span><b style="color:var(--accent)">${faMoney(m.revenue)}</b></div>`,
       `<div class="bt-row"><span>خرید</span><b style="color:var(--amber)">${faMoney(m.purchase_value)}</b></div>`,
-      `<div class="bt-row"><span>سود فروش</span><b style="color:var(--green)">${faMoney(m.profit)}</b></div>`,
+      `<div class="bt-row"><span>سود فروش</span><b style="color:var(--green)"><span dir="ltr">${faMoney(m.profit)}</span></b></div>`,
       m.count ? `<div class="bt-row"><span>تعداد فروش</span><b>${faNum(m.count)}</b></div>` : "",
     ],
   });

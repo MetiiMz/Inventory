@@ -44,10 +44,10 @@ def static_v(path):
 
 
 def environment(**options):
-    env = options["environment"]() if callable(options.get("environment")) else None
-    if env is None:
-        from jinja2 import Environment
-        env = Environment(**options)
+    # Django's Jinja2 backend pops the "environment" key before calling this
+    # factory, so build the environment directly from the remaining options.
+    from jinja2 import Environment
+    env = Environment(**options)
     env.globals.update(
         STATUS_FA=STATUS_FA,
         STATUS_COLOR=STATUS_COLOR,

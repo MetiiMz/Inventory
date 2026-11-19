@@ -133,10 +133,21 @@ function initChart(cfg) {
     const curIdx = Math.max(actual.length - 1, 0);
     const lastActual = actual[curIdx] || {};
     const stepX = plotW / (n - 1 || 1);
-    const maxVal = Math.max(
-      ...actual.map(m => Math.max(...cfg.series.map(s => m[s.key] || 0))), 1);
+    const allVals = actual.flatMap(m => cfg.series.map(s => m[s.key] || 0));
+    const maxVal = Math.max(...allVals, 1);
+    const minVal = Math.min(0, ...allVals);
     const mag = Math.pow(10, Math.floor(Math.log10(maxVal)));
     const top = cfg.niceMax ? niceMax(maxVal) : Math.ceil(maxVal / mag) * mag;
+
+    /* when the minimum is negative, take a "nice" bottom with the same
+       magnitude step as the top so the plot spans [bottom, top]; otherwise
+       bottom stays 0 and behavior is identical to before. */
+    let bottom = 0;
+    if (minVal < 0) {
+      const absMin = Math.abs(minVal);
+      bottom = -(cfg.niceMax ? niceMax(absMin) : Math.ceil(absMin / mag) * mag);
+    }
+    const range = top - bottom;
 
     const styles = getComputedStyle(document.documentElement);
     const cssVar = (name, fallback) =>
@@ -149,7 +160,9 @@ function initChart(cfg) {
     }));
 
     const xAt = (i) => PAD_L + stepX * i;
-    const yAt = (v) => H - PAD_B - (top ? (v / top) * plotH : 0);
+    const yAt = (v) => PAD_T + plotH * (1 - (v - bottom) / range);
+    const zeroY = yAt(0);
+    const clampY = (y) => Math.min(H - PAD_B, Math.max(PAD_T, y));
 
     const ptsOf = (key) => actual.map((m, i) => ({ x: xAt(i), y: yAt(m[key] || 0) }));
     const linePath = (key) => smoothChartPath(ptsOf(key), PAD_T, H - PAD_B);
@@ -157,7 +170,7 @@ function initChart(cfg) {
       const pts = ptsOf(key);
       if (!pts.length) return "";
       return smoothChartPath(pts, PAD_T, H - PAD_B) +
-        ` L${pts[pts.length - 1].x.toFixed(2)},${H - PAD_B} L${pts[0].x.toFixed(2)},${H - PAD_B} Z`;
+        ` L${pts[pts.length - 1].x.toFixed(2)},${zeroY.toFixed(2)} L${pts[0].x.toFixed(2)},${zeroY.toFixed(2)} Z`;
     };
 
     /* گرادیان محو زیر هر خط */
@@ -172,7 +185,7 @@ function initChart(cfg) {
       const x = xAt(i);
       if (i <= curIdx) {
         resolved.forEach(s => {
-          points += `<circle cx="${x}" cy="${yAt(m[s.key] || 0)}" r="3.2" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
+          points += `<circle cx="${x}" cy="${clampY(yAt(m[s.key] || 0))}" r="3.2" fill="${s.color}" stroke="${cRing}" stroke-width="1"/>`;
         });
       }
       const isCur = i === curIdx;
@@ -185,14 +198,17 @@ function initChart(cfg) {
     /* نقطه‌ی پایانی (ماه جاری) برجسته‌تر */
     const lastX = xAt(curIdx);
     resolved.forEach(s => {
-      points += `<circle cx="${lastX}" cy="${yAt(lastActual[s.key] || 0)}" r="4.8" fill="${s.color}" stroke="${cRing}" stroke-width="1.6"/>`;
+      points += `<circle cx="${lastX}" cy="${clampY(yAt(lastActual[s.key] || 0))}" r="4.8" fill="${s.color}" stroke="${cRing}" stroke-width="1.6"/>`;
     });
 
     const gridLines = [0.25, 0.5, 0.75, 1].map(f => {
-      const y = H - PAD_B - plotH * f;
+      const y = PAD_T + plotH * (1 - f);
       return `<line x1="${PAD_L}" x2="${W - PAD_R}" y1="${y}" y2="${y}" stroke="currentColor" opacity="0.07" stroke-dasharray="3 5"/>`;
     }).join("");
     const baseline = `<line x1="${PAD_L}" x2="${W - PAD_R}" y1="${H - PAD_B}" y2="${H - PAD_B}" stroke="currentColor" opacity="0.16"/>`;
+    const zeroLine = bottom < 0
+      ? `<line x1="${PAD_L}" x2="${W - PAD_R}" y1="${zeroY.toFixed(2)}" y2="${zeroY.toFixed(2)}" stroke="currentColor" opacity="0.5"/>`
+      : "";
 
     /* نشانگر عمودی ماه جاری — مرز داده‌ی واقعی و ماه‌های آینده */
     const curLine = `<line x1="${lastX}" x2="${lastX}" y1="${PAD_T}" y2="${H - PAD_B}" stroke="${cAccent}" opacity="0.25" stroke-dasharray="4 5"/>`;
@@ -201,7 +217,7 @@ function initChart(cfg) {
 
     box.innerHTML = `
       <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;color:${cMuted}" role="img" aria-label="${cfg.aria(faNum(curYear))}">
-        ${defs}${gridLines}${baseline}
+        ${defs}${gridLines}${baseline}${zeroLine}
         ${resolved.map(s => `<path d="${areaPath(s.key)}" fill="url(#${cfg.gidPrefix}-${s.gid})"/>`).join("")}
         ${resolved.map(s => `<path d="${linePath(s.key)}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}
         ${curLine}${hoverLine}${points}${labels}${hits}

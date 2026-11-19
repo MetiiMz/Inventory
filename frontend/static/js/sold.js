@@ -80,9 +80,9 @@ function render() {
         ${s.office_code ? `<span class="code-pill" title="کد دفتر فروشگاه" style="background:var(--accent-soft);color:var(--accent)">${esc(s.office_code)}</span>` : '<span class="muted">—</span>'}
       </td>
       <td>${esc(s.customer) || '<span class="muted">—</span>'}</td>
-      <td class="muted" dir="ltr" style="text-align:right">${s.customer_phone_fa || '—'}</td>
+      <td class="muted" dir="ltr" style="text-align:right">${esc(s.customer_phone_fa) || '—'}</td>
       <td class="num" style="color:var(--green);font-weight:600">${s.sale_price_display}</td>
-      <td class="muted">${s.sale_date_fa}</td>
+      <td class="muted">${esc(s.sale_date_fa)}</td>
       <td class="pay-cell">
         ${s.payment_type === "credit"
           ? `<span class="badge blue plain">اعتباری</span> <span class="pay-svc">${esc(s.credit_provider_fa || "")}</span>${s.credit_tracking_code ? `<span class="code-pill" style="font-size:11px;margin-left:4px">${esc(s.credit_tracking_code)}</span>` : ""}`
