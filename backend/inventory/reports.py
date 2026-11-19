@@ -144,24 +144,34 @@ def get_sales_channels(jy=None):
 
     # سرعت: کل سال را یک‌باره می‌خوانیم و در پایتون دسته‌بندی می‌کنیم
     sales_rows = Sale.objects.values_list(
-        "sale_date", "sale_type", "payment_type")
+        "sale_date", "sale_type", "payment_type", "credit_provider")
 
     counts_by_month = {}
-    for sdate, sale_type, payment_type in sales_rows:
+    for sdate, sale_type, payment_type, credit_provider in sales_rows:
         if not sdate:
             continue
         key = _month_key(sdate)
-        agg = counts_by_month.setdefault(key, {"person": 0, "online": 0, "credit": 0})
+        agg = counts_by_month.setdefault(key, {"person": 0, "online": 0,
+            "credit": 0, "credit_snappay": 0, "credit_digipay": 0,
+            "credit_torob": 0})
         if sale_type == "person":
             agg["person"] += 1
         elif sale_type == "online":
             agg["online"] += 1
         if payment_type == "credit":
             agg["credit"] += 1
+            if credit_provider == "snappay":
+                agg["credit_snappay"] += 1
+            elif credit_provider == "digipay":
+                agg["credit_digipay"] += 1
+            elif credit_provider == "torob":
+                agg["credit_torob"] += 1
 
     out = []
     for (jy, jm), start, end in ranges:
-        c = counts_by_month.get((jy, jm), {"person": 0, "online": 0, "credit": 0})
+        c = counts_by_month.get((jy, jm), {"person": 0, "online": 0,
+            "credit": 0, "credit_snappay": 0, "credit_digipay": 0,
+            "credit_torob": 0})
         future = (jy > jy_now) or (jy == jy_now and jm > jm_now)
         out.append({
             "jy": jy, "jm": jm,
@@ -169,6 +179,9 @@ def get_sales_channels(jy=None):
             "person_count": 0 if future else c["person"],
             "online_count": 0 if future else c["online"],
             "credit_count": 0 if future else c["credit"],
+            "credit_snappay_count": 0 if future else c["credit_snappay"],
+            "credit_digipay_count": 0 if future else c["credit_digipay"],
+            "credit_torob_count": 0 if future else c["credit_torob"],
             "future": future,
         })
     return out

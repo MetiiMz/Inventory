@@ -125,6 +125,22 @@ class CalendarServiceTests(TestCase):
             sale_date=iso, customer="z", customer_phone="09123456787",
             sale_type="online", paid_cash=0, payment_type="credit",
             credit_provider="torob", is_settled=False)
+        Sale.objects.create(
+            product=p, sale_price=500, purchase_price=50, profit=450,
+            sale_date=iso, customer="sn", customer_phone="09123456785",
+            sale_type="person", paid_cash=500, payment_type="credit",
+            credit_provider="snappay")
+        Sale.objects.create(
+            product=p, sale_price=600, purchase_price=60, profit=540,
+            sale_date=iso, customer="dg", customer_phone="09123456784",
+            sale_type="online", paid_cash=0, payment_type="credit",
+            credit_provider="digipay")
+        # credit with unknown/empty provider → only credit_count, no sub-row
+        Sale.objects.create(
+            product=p, sale_price=700, purchase_price=70, profit=630,
+            sale_date=iso, customer="uk", customer_phone="09123456783",
+            sale_type="person", paid_cash=700, payment_type="credit",
+            credit_provider="")
         # unknown sale_type → not counted in person/online
         Sale.objects.create(
             product=p, sale_price=400, purchase_price=40, profit=360,
@@ -132,9 +148,12 @@ class CalendarServiceTests(TestCase):
             sale_type="", paid_cash=400, payment_type="cash")
         _, months = services.sales_channels(str(jy))
         hit = next(m for m in months if m["jm"] == jm)
-        self.assertEqual(hit["person_count"], 1)
-        self.assertEqual(hit["online_count"], 2)   # online + online-credit
-        self.assertEqual(hit["credit_count"], 1)   # the online credit sale
+        self.assertEqual(hit["person_count"], 3)   # x + sn + uk
+        self.assertEqual(hit["online_count"], 3)   # y + z + dg
+        self.assertEqual(hit["credit_count"], 4)   # torob + snappay + digipay + empty
+        self.assertEqual(hit["credit_snappay_count"], 1)
+        self.assertEqual(hit["credit_digipay_count"], 1)
+        self.assertEqual(hit["credit_torob_count"], 1)
         self.assertFalse(hit["future"])
         # every other month is zero — including the future ones of the current year
         others = [m for m in months if m["jm"] != jm]

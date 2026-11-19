@@ -1131,6 +1131,10 @@ tr.row-selected { background: var(--accent-soft) !important; }
 .bt-title { font-weight: 800; font-size: 12px; margin-bottom: 4px; }
 .bt-row { display: flex; justify-content: space-between; gap: 14px; color: var(--text-2); }
 .bt-row b { color: var(--text-1); }
+/* اعتباری-زیرسطرها: میقدار، کوچک‌تر و رنگ-muted (فقط وقتی n>0 است) */
+.bt-sub { font-size: 10.5px; opacity: 0.85; padding-inline-start: 18px; }
+.bt-sub span { color: var(--text-3); }
+.bt-sub b { color: var(--text-1); }
 
 /* صفحه‌بندی سال نمودار داشبورد */
 .chart-box { transition: opacity 0.15s ease; }

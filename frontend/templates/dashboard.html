@@ -345,14 +345,27 @@
       { key: "online_count", colorVar: "--purple", fallbackColor: "#9d3fd0", width: 2.6, gid: "purple", areaOp: 0.10 },
       { key: "credit_count", colorVar: "--green",  fallbackColor: "#1fa64a", width: 2.6, gid: "green", areaOp: 0.10 },
     ],
+    niceMax: true,
     tooltip: (m, colors) => {
       const c = Object.fromEntries(colors.map(s => [s.key, s.color]));
-      return [
+      const rows = [
         `<div class="bt-title">${m.label} ${faNum(m.jy)}</div>`,
         m.person_count ? `<div class="bt-row"><span>حضوری</span><b style="color:${c.person_count}">${faNum(m.person_count)}</b></div>` : "",
         m.online_count ? `<div class="bt-row"><span>آنلاین</span><b style="color:${c.online_count}">${faNum(m.online_count)}</b></div>` : "",
-        m.credit_count ? `<div class="bt-row"><span>اعتباری</span><b style="color:${c.credit_count}">${faNum(m.credit_count)}</b></div>` : "",
       ];
+      if (m.credit_count) {
+        rows.push(`<div class="bt-row"><span>اعتباری</span><b style="color:${c.credit_count}">${faNum(m.credit_count)}</b></div>`);
+        if (m.credit_snappay_count > 0) {
+          rows.push(`<div class="bt-row bt-sub"><span>اسنپ‌پی</span><b>${faNum(m.credit_snappay_count)}</b></div>`);
+        }
+        if (m.credit_digipay_count > 0) {
+          rows.push(`<div class="bt-row bt-sub"><span>دیجی‌پی</span><b>${faNum(m.credit_digipay_count)}</b></div>`);
+        }
+        if (m.credit_torob_count > 0) {
+          rows.push(`<div class="bt-row bt-sub"><span>ترب‌پی</span><b>${faNum(m.credit_torob_count)}</b></div>`);
+        }
+      }
+      return rows;
     },
   });
 </script>

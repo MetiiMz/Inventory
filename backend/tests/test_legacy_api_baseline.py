@@ -468,7 +468,9 @@ class LegacyApiBaselineTests(TestCase):
         self.assertEqual(len(body["months"]), 12)
         self.assertNamedKeys(body["months"][0],
                              ("jy", "jm", "label", "person_count",
-                              "online_count", "credit_count", "future"))
+                              "online_count", "credit_count",
+                              "credit_snappay_count", "credit_digipay_count",
+                              "credit_torob_count", "future"))
 
         default = self.client.get("/api/reports/sales-channels")
         self.assertTrue(default.json()["ok"])

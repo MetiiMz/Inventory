@@ -10,7 +10,7 @@
    پارامترهای initChart(cfg):
      boxId / prevBtnId / nextBtnId / yearLabelId / titleId — شناسه‌ها
      dataKey       — نام کلید داده‌ی رندر اولیه در dataset جعبه (data-*)
-                     بدون پیشوند data-؛ مثلاً "monthly" برای data-monthly
+                     بدون پیشوند data-؛ مثلاً \"monthly\" برای data-monthly
      endpoint      — مسیر API برای تغییر سال
      gidPrefix     — پیشوند یکتای id گرادیان‌ها (دو نمودار در یک صفحه)
      series        — [{ key, colorVar, fallbackColor, width, gid, areaOp }]
@@ -22,21 +22,49 @@
 
 "use strict";
 
-/* منحنی نرم: تبدیل Catmull-Rom به Bézier مکعبی — بدون شکستگی تیز.
-   نقاط کنترلِ عمودی در بازه‌ی [minY, maxY] قید می‌شوند تا منحنی از
-   خط پایه پایین‌تر یا از بالای ناحیه‌ی رسم بالاتر نزند (overshoot). */
+/* منحنی نرم: مکعبی-مونوتون (PCHIP / فریتش-کارلسون) — منحنی از هر نقطه عبور می‌کند،
+   هرگز سرریز نمی‌کند (نقاط کنترل در بازه‌ی [minY, maxY] قید می‌شوند، بنابراین هرگز
+   زیر خط پایه یا بالای ناحیه‌ی رسم نمی‌رود) و در نقاطِ ekstremum مماس مسطح است. */
 function smoothChartPath(pts, minY, maxY) {
   if (!pts.length) return "";
   if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`;
+  const n = pts.length;
   const clampY = (y) => Math.min(maxY, Math.max(minY, y));
-  let d = `M${pts[0].x},${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6, c1y = clampY(p1.y + (p2.y - p0.y) / 6);
-    const c2x = p2.x - (p3.x - p1.x) / 6, c2y = clampY(p2.y - (p3.y - p1.y) / 6);
-    d += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  /* شیب‌های بین نقاط متوالی */
+  const d = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) d[i] = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
+  /* مماس‌های هر نقطه (مونوتون) */
+  const m = new Array(n);
+  m[0] = d[0];
+  m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] * d[i] <= 0) {
+      m[i] = 0; // extremum — flat tangent
+    } else {
+      const h0 = xs[i] - xs[i - 1], h1 = xs[i + 1] - xs[i];
+      m[i] = (h0 + h1) / (h0 / d[i] + h1 / d[i - 1]); // harmonic-ish mean
+      const lim = 3 * Math.min(Math.abs(d[i - 1]), Math.abs(d[i]));
+      if (Math.abs(m[i]) > lim) m[i] = Math.sign(m[i]) * lim;
+    }
   }
-  return d;
+  let out = `M${xs[0].toFixed(2)},${clampY(ys[0]).toFixed(2)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = xs[i + 1] - xs[i];
+    const c1x = xs[i] + h / 3, c1y = clampY(ys[i] + (m[i] * h) / 3);
+    const c2x = xs[i + 1] - h / 3, c2y = clampY(ys[i + 1] - (m[i + 1] * h) / 3);
+    out += ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${xs[i + 1].toFixed(2)},${clampY(ys[i + 1]).toFixed(2)}`;
+  }
+  return out;
+}
+
+/* «خوب»‌ترین سقف برای ارتفاع نمودار: کوچک‌ترین مقدار ازible گام‌ها ≥ maxCount
+  تا تبلدهای کم‌حجم انگشت‌نشده، و رأس‌ها به لبه‌ی نمودارChalk نمی‌نشیند. */
+function niceMax(v) {
+  const steps = [4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200, 300, 400, 500];
+  for (const s of steps) if (s >= v) return s;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / mag) * mag;
 }
 
 function initChart(cfg) {
@@ -108,7 +136,7 @@ function initChart(cfg) {
     const maxVal = Math.max(
       ...actual.map(m => Math.max(...cfg.series.map(s => m[s.key] || 0))), 1);
     const mag = Math.pow(10, Math.floor(Math.log10(maxVal)));
-    const top = Math.ceil(maxVal / mag) * mag;
+    const top = cfg.niceMax ? niceMax(maxVal) : Math.ceil(maxVal / mag) * mag;
 
     const styles = getComputedStyle(document.documentElement);
     const cssVar = (name, fallback) =>
@@ -133,8 +161,7 @@ function initChart(cfg) {
     };
 
     /* گرادیان محو زیر هر خط */
-    const defs = `<defs>${resolved.map(s => `
-      <linearGradient id="${cfg.gidPrefix}-${s.gid}" x1="0" y1="0" x2="0" y2="1">
+    const defs = `<defs>${resolved.map(s => `\n      <linearGradient id="${cfg.gidPrefix}-${s.gid}" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="${s.color}" stop-opacity="${s.areaOp}"/>
         <stop offset="1" stop-color="${s.color}" stop-opacity="0"/>
       </linearGradient>`).join("")}
