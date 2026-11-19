@@ -175,6 +175,35 @@ class SalePaymentDictTests(TestCase):
         d = utils.sale_dict(s, None)
         self.assertEqual(d["product_name"], "")
         self.assertEqual(d["brand"], "")
+        self.assertEqual(d["purchase_date_fa"], "")
+
+    def test_sale_dict_purchase_date_fa(self):
+        """The sold product's purchase date ships as a Jalali string."""
+        p = make_product(purchase_date="2026-09-10")
+        s = Sale.objects.create(
+            product=p, sale_price=1500, purchase_price=1000, profit=500,
+            sale_date=today_iso(), customer="علی", customer_phone="09123456789",
+            paid_amount=1500, payment_type="cash", is_settled=True,
+            invoice_code="")
+        d = utils.sale_dict(s)
+        self.assertIn("purchase_date_fa", d)
+        self.assertEqual(d["purchase_date_fa"], utils.fa_date("2026-09-10"))
+        self.assertEqual(d["purchase_date_fa"], "۱۴۰۵/۰۶/۱۹")
+
+    def test_sale_dict_purchase_date_fa_blank_when_product_has_none(self):
+        p = make_product(purchase_date="")
+        s = Sale.objects.create(
+            product=p, sale_price=10, purchase_price=5, profit=5,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789",
+            paid_amount=10, payment_type="cash", is_settled=True,
+            invoice_code="")
+        self.assertEqual(utils.sale_dict(s)["purchase_date_fa"], "")
+
+    def test_sale_dict_purchase_date_fa_empty_for_deleted_product(self):
+        s = Sale(
+            product_id=None, sale_price=1, purchase_price=1, profit=0,
+            sale_date=today_iso(), customer="x", customer_phone="09123456789")
+        self.assertEqual(utils.sale_dict(s, None)["purchase_date_fa"], "")
 
     def test_payment_dict_math(self):
         pay = Payment.objects.create(

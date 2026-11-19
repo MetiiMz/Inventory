@@ -801,6 +801,101 @@ tr.row-selected { background: var(--accent-soft) !important; }
 @keyframes sheet-up { from { opacity: 0; transform: translateY(26px) scale(0.98); } }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } }
 
+/* ------------------------------------------------ sale detail modal */
+
+/* مودال جزئیات فروش: کمی پهن‌تر، سر/پا ثابت و بدنه‌ی اسکرول‌شونده */
+.modal.modal-detail { max-width: 760px; }
+#modal-sale-detail .modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+#modal-sale-detail .modal-head,
+#modal-sale-detail .modal-foot { flex: 0 0 auto; }
+/* خط مویی بالای فوتر: بدنه‌ی اسکرول‌شونده از دکمه‌ها جدا دیده شود */
+#modal-sale-detail .modal-foot { border-top: 1px solid var(--hairline); }
+
+.sd-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-3) transparent;
+}
+.sd-body::-webkit-scrollbar { width: 8px; }
+.sd-body::-webkit-scrollbar-track { background: transparent; }
+.sd-body::-webkit-scrollbar-thumb { background: var(--text-3); border-radius: 99px; }
+
+.sd-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.thumb.sd-thumb { width: 96px; height: 96px; border-radius: 20px; }
+.sd-thumb svg { width: 36px; height: 36px; }
+.sd-name { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.45; color: var(--text-1); overflow-wrap: anywhere; }
+
+.sd-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px 16px;
+}
+/* دارک: کارت کمی تیره‌تر از مودال تا کاشی‌ها برجسته بمانند (مثل ردیف‌های جدول) */
+[data-theme="dark"] .sd-card { background: var(--surface); }
+.sd-card + .sd-card { margin-top: 14px; }
+.sd-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+.sd-card-title::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 3px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--accent);
+}
+
+.sd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sd-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px 9px;
+  background: var(--surface-strong);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+}
+.sd-tile.span-2 { grid-column: 1 / -1; }
+.sd-k { font-size: 11px; font-weight: 600; color: var(--text-3); line-height: 1.5; }
+.sd-v {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.sd-dash { color: var(--text-3); font-weight: 600; }
+.sd-profit { color: var(--green); }
+.sd-notes { font-weight: 600; color: var(--text-2); white-space: pre-line; }
+.sd-v .code-pill { font-size: 12px; padding: 3px 9px; max-width: 100%; overflow-wrap: anywhere; }
+.sd-v .code-pill.is-accent { background: var(--accent-soft); color: var(--accent); }
+
+@media (max-width: 600px) {
+  #modal-sale-detail .modal { max-height: 92vh; }
+  .sd-header { gap: 12px; margin-bottom: 14px; }
+  .thumb.sd-thumb { width: 72px; height: 72px; border-radius: 16px; }
+  .sd-thumb svg { width: 28px; height: 28px; }
+  .sd-name { font-size: 17px; }
+  .sd-card { padding: 12px 12px 14px; }
+  .sd-grid { grid-template-columns: 1fr; }
+}
+
 /* ------------------------------------------------ toast */
 
 #toast-zone {

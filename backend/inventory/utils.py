@@ -259,6 +259,8 @@ def sale_dict(r, product=None):
         "reference": p.reference if p else "",
         "brand": p.brand if p else "",
         "supplier": p.supplier if p else "",
+        # تاریخ خرید محصول (تاریخ خرید ساعت) — برای کارت «اطلاعات ساعت»
+        "purchase_date_fa": fa_date(p.purchase_date) if (p and p.purchase_date) else "",
         "sale_date_fa": fa_date(r.sale_date),
         "settled_at_fa": fa_date(r.settled_at) if r.settled_at else "",
         "sale_price_display": fa_money(r.sale_price),
