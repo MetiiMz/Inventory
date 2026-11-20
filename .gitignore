@@ -46,14 +46,6 @@ htmlcov/
 .vscode/
 .idea/
 
-# Claude Code local settings
-.claude/settings.local.json
-
-# Node / Playwright browser checks
-node_modules/
-test-results/
-playwright-report/
-
 # OS junk
 .DS_Store
 Thumbs.db
